@@ -1034,6 +1034,21 @@ def _build_app() -> gr.Blocks:
         border: 0 !important;
         box-shadow: none !important;
     }
+    html,
+    body,
+    .gradio-container {
+        color-scheme: dark !important;
+    }
+    [aria-label*="theme" i],
+    [title*="theme" i],
+    button[aria-label*="light" i],
+    button[aria-label*="system" i],
+    button[title*="light" i],
+    button[title*="system" i],
+    .theme-toggle,
+    .darkmode-toggle {
+        display: none !important;
+    }
     .asm-panel input,
     .asm-panel textarea,
     .asm-panel .file-preview,
@@ -1041,13 +1056,14 @@ def _build_app() -> gr.Blocks:
     .asm-panel .form {
         background: rgba(4, 31, 39, 0.72) !important;
         color: #f8fafc !important;
-        border-color: rgba(105, 186, 205, 0.16) !important;
-        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.36) !important;
+        border: 1px solid rgba(255, 165, 92, 0.58) !important;
+        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.42), 0 0 0 1px rgba(255, 165, 92, 0.16) !important;
     }
     .asm-panel input:focus,
     .asm-panel textarea:focus {
-        border-color: rgba(180, 235, 245, 0.26) !important;
-        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.36), 0 0 0 1px rgba(180, 235, 245, 0.10) !important;
+        border-color: rgba(255, 190, 118, 0.9) !important;
+        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.42), 0 0 0 2px rgba(255, 165, 92, 0.24) !important;
+        outline: none !important;
     }
     .asm-panel input::placeholder,
     .asm-panel textarea::placeholder {
@@ -1080,7 +1096,37 @@ def _build_app() -> gr.Blocks:
         neutral_hue="slate",
         radius_size="sm",
     )
-    with gr.Blocks(title=CONTENT["brand"], css=css, theme=theme) as demo:
+    force_dark_js = """
+    () => {
+        const applyDarkOnly = () => {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.colorScheme = "dark";
+            document.body?.classList.add("dark");
+            try {
+                localStorage.setItem("theme", "dark");
+                localStorage.setItem("gradio-theme", "dark");
+                localStorage.setItem("__theme", "dark");
+            } catch (_) {}
+            document.querySelectorAll("button, [role='button'], select").forEach((el) => {
+                const text = [
+                    el.innerText,
+                    el.getAttribute("aria-label"),
+                    el.getAttribute("title")
+                ].filter(Boolean).join(" ").toLowerCase();
+                if (text.includes("light") || text.includes("system theme") || text.includes("theme")) {
+                    el.style.display = "none";
+                }
+            });
+        };
+        applyDarkOnly();
+        new MutationObserver(applyDarkOnly).observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true
+        });
+    }
+    """
+    with gr.Blocks(title=CONTENT["brand"], css=css, theme=theme, js=force_dark_js) as demo:
         gr.HTML(
             f"""
             <div class="asm-space-bg" aria-hidden="true"></div>
