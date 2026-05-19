@@ -52,6 +52,7 @@ TEST_ALLOWED_EMAILS = {
     for email in re.split(r"[,;\s]+", os.getenv("TEST_ALLOWED_EMAILS", ""))
     if email.strip()
 }
+PRIVATE_BETA_ENABLED = bool(TEST_ACCESS_CODE or TEST_ALLOWED_EMAILS)
 
 DATA_ROOT.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1030,6 +1031,16 @@ def _build_app() -> gr.Blocks:
         color: #d9e7f5;
         letter-spacing: 0;
     }
+    .asm-beta-note {
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 165, 92, 0.32);
+        border-radius: 8px;
+        background: rgba(68, 37, 18, 0.42);
+        color: #ffd8b6;
+        font-size: 14px;
+        line-height: 1.45;
+    }
     .asm-status {
         min-height: 150px;
         padding: 14px;
@@ -1196,14 +1207,19 @@ def _build_app() -> gr.Blocks:
             with gr.Row(elem_classes=["asm-grid"]):
                 with gr.Column(scale=1, elem_classes=["asm-panel"]):
                     gr.HTML("<h2>Submit CV</h2>")
+                    gr.Markdown(
+                        "Private beta access is enabled.",
+                        elem_classes=["asm-beta-note"],
+                        visible=PRIVATE_BETA_ENABLED,
+                    )
                     name = gr.Textbox(label="Researcher full name")
                     institution = gr.Textbox(label="Institution hint (optional)")
                     orcid = gr.Textbox(label="ORCID (optional)")
                     submitter_email = gr.Textbox(label="Email for notification")
                     access_code = gr.Textbox(
-                        label="Testing access code",
+                        label="Private beta access code",
                         type="password",
-                        visible=bool(TEST_ACCESS_CODE),
+                        visible=PRIVATE_BETA_ENABLED,
                     )
                     faculty_page = gr.Textbox(label="Faculty page URL (optional)")
                     cv_file = gr.File(

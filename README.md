@@ -73,7 +73,7 @@ MAX_CV_BYTES=20971520
 
 Email delivery uses an HTTPS email API by default because some hosting platforms block outbound SMTP ports. Add `RESEND_API_KEY` or `BREVO_API_KEY`; SMTP is only used when `EMAIL_BACKEND=smtp`. For Brevo, `MAIL_FROM` should be a sender address verified in Brevo. If `MAIL_FROM` is not set, the app falls back to `ADMIN_COPY_EMAIL`.
 
-For a private testing phase, set `TEST_ACCESS_CODE` to require a shared code before submission or status/download checks. Set `TEST_ALLOWED_EMAILS` to a comma-separated allowlist. If both are set, both checks must pass.
+For a private testing phase, set `TEST_ACCESS_CODE` to require a shared code before submission or status/download checks. Set `TEST_ALLOWED_EMAILS` to a comma-separated allowlist. If both are set, both checks must pass. Restart the Space after adding or changing these values so the interface picks them up.
 
 ## Privacy Defaults
 
