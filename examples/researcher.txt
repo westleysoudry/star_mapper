@@ -1,0 +1,28 @@
+# Researcher Mapper — input file
+# Fill in the fields below, then either:
+#   • Open Researcher Mapper.bat  (double-click, no typing needed)
+#   • Or run:  python -m researcher_mapper.pipelines.run_target --input researcher.txt
+#
+# Lines starting with # are comments and are ignored.
+# Leave a value blank to use the default.
+
+name: Ada Lovelace
+institution: University of London
+orcid:
+
+# Optional: URL of the researcher's university profile page
+faculty_page:
+
+# Optional: path to a plain-text CV file (e.g.  C:\Users\you\cv.txt)
+cv:
+
+# Publication range and pool settings
+from_year: 2014
+max_works: 400
+pool_size: 120
+list_size: 20
+star_map_topics: 5
+include_citation_neighbors: false
+
+# Where to save results (folder will be created if it doesn't exist)
+output_dir: output

@@ -1,0 +1,6 @@
+bucket_caps:
+  in_area_collaborators: 20    # main bucket; dynamically raised to the requested list size
+  interdisciplinary_collaborators: 5
+  recommendation_letter_writers: 3
+  dept_mentors: 2
+  area_mentors: 3

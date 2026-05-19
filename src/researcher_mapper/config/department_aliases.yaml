@@ -1,0 +1,61 @@
+department_aliases:
+  computer science:
+    - computer science and engineering
+    - computing
+    - cs
+    - information technology
+    - informatics
+    - software engineering
+
+  electrical engineering:
+    - electrical and computer engineering
+    - ece
+    - eecs
+    - electrical engineering and computer science
+
+  mathematics:
+    - math
+    - applied mathematics
+    - pure mathematics
+    - mathematical sciences
+
+  physics:
+    - applied physics
+    - theoretical physics
+    - experimental physics
+
+  biology:
+    - biological sciences
+    - life sciences
+    - molecular biology
+    - cell biology
+    - genetics
+    - biochemistry
+
+  chemistry:
+    - chemical sciences
+    - biochemistry
+
+  neuroscience:
+    - brain sciences
+    - cognitive neuroscience
+    - computational neuroscience
+    - neural engineering
+
+  medicine:
+    - medical sciences
+    - clinical medicine
+    - biomedical sciences
+
+  psychology:
+    - cognitive science
+    - behavioral sciences
+
+  economics:
+    - business economics
+    - finance
+
+  statistics:
+    - probability and statistics
+    - statistical sciences
+    - biostatistics

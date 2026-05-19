@@ -1,0 +1,11 @@
+.git
+.github
+.pytest*
+build
+output
+tmpono_f8ey
+**/__pycache__
+**/*.pyc
+src/*.egg-info
+.env
+*.log

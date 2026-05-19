@@ -1,0 +1,25 @@
+# Researcher input file — pass to the CLI with:
+#   python -m researcher_mapper.pipelines.run_target --input researcher.yaml
+#
+# All fields except `name` are optional.
+# Command-line flags override any value set here.
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+name: "Ada Lovelace"
+institution: "University of London"   # helps disambiguation; leave blank if unsure
+orcid: ""                              # e.g. "0000-0001-2345-6789"
+
+# ── Enrichment sources ────────────────────────────────────────────────────────
+faculty_page: ""   # URL of the researcher's university profile page
+cv: ""             # path to a plain-text CV file
+
+# ── Ingestion settings ────────────────────────────────────────────────────────
+from_year: 2014        # earliest publication year to include
+max_works: 400         # cap on works fetched from OpenAlex
+pool_size: 120         # candidate pool size before ranking (60–150 recommended)
+list_size: 20          # requested number of researchers in each list (1-100)
+star_map_topics: 5     # number of topic axes to display in star_map.html (2-10)
+include_citation_neighbors: false   # fetch authors from reference lists (slower)
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output_dir: "output"

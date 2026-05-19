@@ -1,0 +1,42 @@
+[project]
+name = "researcher-mapper"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27.0",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.2.0",
+  "tenacity>=8.2.0",
+  "pyyaml>=6.0.1",
+  "numpy>=1.26.0",
+  "pandas>=2.2.0",
+  "scikit-learn>=1.4.0",
+  "scipy>=1.12.0",
+  "networkx>=3.2.0",
+  "plotly>=5.22.0",
+  "rapidfuzz>=3.9.0",
+  "python-dotenv>=1.0.1",
+  "beautifulsoup4>=4.12.0",
+  "lxml>=5.2.0",
+  "pdfplumber>=0.11.0",
+  "gradio>=5.0.0",
+  "huggingface-hub>=0.25.0",
+]
+
+[project.optional-dependencies]
+build-exe = [
+  "pyinstaller>=6.0",
+]
+
+[project.scripts]
+researcher-mapper = "researcher_mapper.pipelines.run_target:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+researcher_mapper = ["config/*.yaml"]

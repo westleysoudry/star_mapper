@@ -1,0 +1,50 @@
+policy:
+  allow_recent_coauthors_as_letter_writers: false
+  allow_same_department_letter_writers: false
+  dept_mentor_requires_same_department: false
+  dept_mentor_requires_same_institution: true
+  dept_mentors_allows_coauthors: true
+  israel_country_code: "IL"
+  rebalance_bucket_caps: true
+  enable_supplemental_in_area_fill: true
+
+  exclude_industry_from_mentors: true
+  exclude_industry_from_letter_writers: true
+
+  max_inactivity_years: 10
+
+  min_same_area_for_in_area_collaborator: 0.18
+  min_same_area_for_supplemental_in_area: 0.25
+  min_seniority_for_supplemental_in_area: 0.45
+  min_same_area_for_unbridged_in_area_collaborator: 0.45
+  min_familiarity_for_borderline_in_area: 0.30
+  min_same_area_for_unbridged_country_in_area_collaborator: 0.35
+  min_seniority_for_unbridged_country_in_area_collaborator: 0.50
+  min_reputation_for_unbridged_country_in_area_collaborator: 0.55
+  min_same_area_for_country_moderate_supplemental_in_area: 0.40
+  min_seniority_for_country_moderate_supplemental_in_area: 0.48
+  min_same_area_for_country_broad_supplemental_in_area: 0.25
+  max_same_area_for_country_broad_supplemental_in_area: 0.35
+  min_seniority_for_country_broad_supplemental_in_area: 0.50
+  min_reputation_for_country_broad_supplemental_in_area: 0.0
+  min_base_similarity_for_country_broad_supplemental_in_area: 0.18
+  min_same_area_for_senior_supplemental_in_area: 0.35
+  min_seniority_for_senior_supplemental_in_area: 0.60
+  min_reputation_for_senior_supplemental_in_area: 0.58
+  min_same_area_for_letter_writer: 0.30
+  min_same_area_for_area_mentor: 0.30
+  min_same_area_for_interdisciplinary_min: 0.07
+  min_same_area_for_interdisciplinary_max: 0.18
+  min_complementary_topic_for_interdisciplinary: 0.15
+  min_same_area_for_dept_mentor: 0.30
+  min_seniority_for_mentors: 0.65
+  min_seniority_for_letter_writers: 0.65
+  min_seniority_for_collaborators: 0.45
+  strong_same_area_for_junior_collaborator: 0.55
+  min_reputation_for_letter_writers: 0.75
+
+  recent_coauthor_years: 5
+  target_list_size: 20
+  min_seniority_for_all: 0.40
+  min_works_for_all: 20
+  exclude_all_coauthors: true

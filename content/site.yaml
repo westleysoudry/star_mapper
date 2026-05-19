@@ -1,0 +1,12 @@
+brand: "Academic Star Map"
+tagline: "Find nearby researchers, mentors, collaborators, and letter-writer candidates from a CV and public scholarly metadata."
+intro_md: |
+  Upload a CV and a few identifying details. The map can take a long time to compute, so you can leave the page open or wait for the completion email.
+
+  CV files are deleted immediately after parsing by default. Finished result files are deleted 1 day after download, or 7 days after completion if never downloaded.
+privacy_note_md: |
+  Academic Star Map uses public scholarly metadata from OpenAlex, Crossref, ORCID, and Semantic Scholar. The results are recommendations for exploration, not official evaluations.
+admin_note_md: |
+  Calibration retention is admin-only. When enabled with the admin token, the uploaded CV is retained in the private results dataset for later calibration.
+email_subject: "Your Academic Star Map is ready"
+email_footer: "Academic Star Map"
