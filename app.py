@@ -1049,11 +1049,16 @@ def _build_app() -> gr.Blocks:
     .darkmode-toggle {
         display: none !important;
     }
-    .asm-panel input,
-    .asm-panel textarea,
     .asm-panel .file-preview,
     .asm-panel .block,
     .asm-panel .form {
+        background: rgba(4, 31, 39, 0.72) !important;
+        color: #f8fafc !important;
+        border-color: rgba(105, 186, 205, 0.16) !important;
+        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.36) !important;
+    }
+    .asm-panel input,
+    .asm-panel textarea {
         background: rgba(4, 31, 39, 0.72) !important;
         color: #f8fafc !important;
         border: 1px solid rgba(255, 165, 92, 0.58) !important;
