@@ -48,6 +48,33 @@ def test_dept_mentor_requires_same_dept_and_inst():
     assert passes_hard_filters(c2, "dept_mentors", _POLICY)
 
 
+def test_dept_mentor_accepts_same_department_despite_low_topic_overlap():
+    policy = dict(_POLICY, min_same_area_for_dept_mentor=0.30)
+    c = _make_candidate(
+        same_department=True,
+        same_institution=True,
+        same_area_score=0.05,
+        seniority_score=0.80,
+    )
+    assert passes_hard_filters(c, "dept_mentors", policy)
+
+
+def test_dept_mentor_accepts_same_institution_cv_advisor():
+    policy = dict(
+        _POLICY,
+        dept_mentor_requires_same_department=False,
+        min_same_area_for_dept_mentor=0.30,
+    )
+    c = _make_candidate(
+        same_department=False,
+        same_institution=True,
+        same_area_score=0.05,
+        seniority_score=0.80,
+        cv_relationship="advisor",
+    )
+    assert passes_hard_filters(c, "dept_mentors", policy)
+
+
 def test_area_mentor_rejects_same_dept():
     c = _make_candidate(same_department=True, seniority_score=0.80, same_area_score=0.70)
     assert not passes_hard_filters(c, "area_mentors", _POLICY)

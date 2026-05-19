@@ -70,6 +70,36 @@ def test_assign_respects_caps():
     assert len(in_area) <= 2
 
 
+def test_assign_guarantees_same_institution_mentor_when_available():
+    institutional = _make(
+        "same_inst",
+        same_institution=True,
+        same_department=False,
+        same_area_score=0.05,
+        seniority_score=0.85,
+        bucket_scores=BucketScores(dept_mentors=0.10),
+    )
+    candidates = [
+        institutional,
+        _make("other1", same_area_score=0.80, seniority_score=0.75),
+        _make("other2", same_area_score=0.75, seniority_score=0.72),
+        _make("other3", same_area_score=0.70, seniority_score=0.70),
+    ]
+    policy = dict(
+        _POLICY,
+        target_list_size=2,
+        dept_mentor_requires_same_department=False,
+        min_same_area_for_dept_mentor=0.30,
+    )
+    caps = dict(_CAPS, dept_mentors=1, in_area_collaborators=2)
+
+    result = assign_final_list(candidates, caps, policy, target_size=2)
+
+    assert len(result) == 2
+    assert result[0].candidate_id == "same_inst"
+    assert result[0].assigned_bucket == "dept_mentors"
+
+
 def test_rebalanced_caps_make_in_area_main_bucket():
     candidates = [
         _make(f"mentor{i}", same_area_score=0.70, seniority_score=0.80)

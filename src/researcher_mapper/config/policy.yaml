@@ -4,6 +4,7 @@ policy:
   dept_mentor_requires_same_department: false
   dept_mentor_requires_same_institution: true
   dept_mentors_allows_coauthors: true
+  ensure_institutional_mentor: true
   israel_country_code: "IL"
   rebalance_bucket_caps: true
   enable_supplemental_in_area_fill: true

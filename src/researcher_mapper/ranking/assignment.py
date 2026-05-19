@@ -98,22 +98,26 @@ def passes_hard_filters(candidate: CandidateScore, bucket: str, policy: dict) ->
     min_collaborator_seniority = policy.get("min_seniority_for_collaborators")
 
     if bucket == "dept_mentors":
-        # Hard-exclude when we have explicit knowledge that the candidate is in
-        # a *different* department from the target (both sides' dept info known
-        # and they do not match).  This fires even when
-        # dept_mentor_requires_same_department is False in policy — that flag
-        # only governs the fallback behaviour when dept info is absent.
-        if candidate.dept_explicitly_different:
-            return False
         if policy.get("dept_mentor_requires_same_department", True) and not same_dept:
             return False
         if policy.get("dept_mentor_requires_same_institution", True) and not same_inst:
+            return False
+        if seniority < min_seniority:
+            return False
+        if same_inst and is_cv_advisor:
+            return True
+        if same_dept:
+            return True
+        # If we know the candidate is in a different department, keep them out
+        # of the regular institutional-mentor pass; the same-institution
+        # fallback can still use them if the bucket would otherwise be empty.
+        if candidate.dept_explicitly_different:
             return False
         # Require at least some same-area overlap — a statistician or linguist in
         # the same department is not a useful mentor for an ML theorist.
         if same_area < policy.get("min_same_area_for_dept_mentor", 0.0):
             return False
-        return seniority >= min_seniority
+        return True
 
     if bucket == "area_mentors":
         if same_dept:  # area mentor should be outside the immediate department
@@ -316,6 +320,118 @@ def _supplemental_in_area_sort_key(candidate: CandidateScore) -> tuple[float, fl
     )
 
 
+def _institutional_mentor_sort_key(
+    candidate: CandidateScore,
+) -> tuple[bool, bool, bool, float, float, float, float]:
+    return (
+        candidate.cv_relationship in ("advisor", "postdoc_host"),
+        candidate.same_department,
+        not candidate.dept_explicitly_different,
+        _bucket_score(candidate, "dept_mentors"),
+        candidate.seniority_score,
+        candidate.reputation_score,
+        candidate.same_area_score,
+    )
+
+
+def _passes_institutional_mentor_fallback(candidate: CandidateScore, policy: dict) -> bool:
+    """Relaxed same-institution fallback used only if no mentor was assigned."""
+    if not candidate.same_institution:
+        return False
+
+    max_inactivity = policy.get("max_inactivity_years", 10)
+    if (
+        candidate.last_pub_year is not None
+        and (_CURRENT_YEAR - candidate.last_pub_year) > max_inactivity
+    ):
+        return False
+
+    exclude_coauthors = policy.get("exclude_all_coauthors", True)
+    bucket_allows_coauthors = policy.get("dept_mentors_allows_coauthors", False)
+    if exclude_coauthors and not bucket_allows_coauthors and candidate.any_coauthor:
+        return False
+
+    min_works = policy.get("min_works_for_all", 0)
+    if min_works and candidate.works_count < min_works:
+        return False
+
+    if candidate.is_non_research_institution:
+        return False
+
+    if (
+        not candidate.is_academic_institution
+        and policy.get("exclude_industry_from_mentors", True)
+    ):
+        return False
+
+    return candidate.seniority_score >= policy.get("min_seniority_for_mentors", 0.60)
+
+
+def _find_assigned_index(assigned: list[CandidateScore], candidate_id: str) -> int | None:
+    for idx, candidate in enumerate(assigned):
+        if candidate.candidate_id == candidate_id:
+            return idx
+    return None
+
+
+def _replacement_index_for_institutional_mentor(
+    assigned: list[CandidateScore],
+) -> int | None:
+    replacement_buckets = [
+        "interdisciplinary_collaborators",
+        "in_area_collaborators",
+        "recommendation_letter_writers",
+        "area_mentors",
+    ]
+    for bucket in replacement_buckets:
+        for idx in range(len(assigned) - 1, -1, -1):
+            if assigned[idx].assigned_bucket == bucket:
+                return idx
+    return len(assigned) - 1 if assigned else None
+
+
+def _ensure_institutional_mentor(
+    assigned: list[CandidateScore],
+    all_candidates: list[CandidateScore],
+    bucket_caps: dict[str, int],
+    policy: dict,
+    target_size: int,
+) -> None:
+    if not policy.get("ensure_institutional_mentor", True):
+        return
+    if bucket_caps.get("dept_mentors", 0) <= 0:
+        return
+    if any(c.assigned_bucket == "dept_mentors" for c in assigned):
+        return
+
+    fallback_pool = [
+        c for c in all_candidates if _passes_institutional_mentor_fallback(c, policy)
+    ]
+    if not fallback_pool:
+        return
+
+    fallback_pool.sort(key=_institutional_mentor_sort_key, reverse=True)
+    chosen = fallback_pool[0]
+    chosen.assigned_bucket = "dept_mentors"
+
+    existing_idx = _find_assigned_index(assigned, chosen.candidate_id)
+    if existing_idx is not None:
+        assigned.pop(existing_idx)
+        assigned.insert(0, chosen)
+        return
+
+    if len(assigned) < target_size:
+        assigned.insert(0, chosen)
+        return
+
+    replace_idx = _replacement_index_for_institutional_mentor(assigned)
+    if replace_idx is None:
+        return
+    replaced = assigned.pop(replace_idx)
+    replaced.assigned_bucket = None
+    assigned.insert(0, chosen)
+
+
 def assign_final_list(
     candidates: list[CandidateScore],
     bucket_caps: dict[str, int],
@@ -351,6 +467,8 @@ def assign_final_list(
                 ),
                 reverse=True,
             )
+        elif bucket == "dept_mentors":
+            eligible.sort(key=_institutional_mentor_sort_key, reverse=True)
         else:
             eligible.sort(key=lambda c: _bucket_score(c, bucket), reverse=True)
 
@@ -387,6 +505,14 @@ def assign_final_list(
 
         if len(assigned) >= target_size:
             break
+
+    _ensure_institutional_mentor(
+        assigned,
+        candidates,
+        bucket_caps,
+        policy,
+        target_size,
+    )
 
     return assigned
 
