@@ -457,7 +457,7 @@ def _send_email(
 
 def _testing_access_error(email: str = "", access_code: str = "") -> str | None:
     if TEST_ACCESS_CODE and (access_code or "").strip() != TEST_ACCESS_CODE:
-        return "This test site is private for now. Please enter the testing access code."
+        return "Wrong private beta access code. Please check the code and try again."
     if TEST_ALLOWED_EMAILS and (email or "").strip().lower() not in TEST_ALLOWED_EMAILS:
         return "This test site is private for now. This email is not on the testing list."
     return None
@@ -668,10 +668,8 @@ def _run_job(
 
 def start_job(
     name: str,
-    institution: str,
     orcid: str,
     submitter_email: str,
-    faculty_page: str,
     cv_file: str,
     access_code: str = "",
 ) -> tuple[str, str, Any, Any]:
@@ -680,7 +678,7 @@ def start_job(
     submitter_email = (submitter_email or "").strip()
     access_error = _testing_access_error(submitter_email, access_code)
     if access_error:
-        return access_error, "", gr.update(value=None), gr.update(value=None)
+        raise gr.Error(access_error)
     if not name:
         return "Please enter the researcher's full name.", "", gr.update(value=None), gr.update(value=None)
     if not submitter_email:
@@ -720,10 +718,10 @@ def start_job(
         _run_job,
         job_id,
         name=name,
-        institution=(institution or "").strip(),
+        institution="",
         orcid=(orcid or "").strip(),
         email=submitter_email,
-        faculty_page=(faculty_page or "").strip(),
+        faculty_page="",
         cv_path=cv_path,
     )
     return (
@@ -794,7 +792,7 @@ def check_status_and_downloads(
 ) -> tuple[str, Any, Any]:
     access_error = _testing_access_error(submitter_email, access_code)
     if access_error:
-        return access_error, gr.update(value=None), gr.update(value=None)
+        raise gr.Error(access_error)
     status_text = check_status(job_id)
     starmap_update, excel_update = _download_button_updates(job_id)
     return status_text, starmap_update, excel_update
@@ -1213,7 +1211,6 @@ def _build_app() -> gr.Blocks:
                         visible=PRIVATE_BETA_ENABLED,
                     )
                     name = gr.Textbox(label="Researcher full name")
-                    institution = gr.Textbox(label="Institution (optional)")
                     orcid = gr.Textbox(label="ORCID (optional)")
                     submitter_email = gr.Textbox(label="Email for notification")
                     access_code = gr.Textbox(
@@ -1221,7 +1218,6 @@ def _build_app() -> gr.Blocks:
                         type="password",
                         visible=PRIVATE_BETA_ENABLED,
                     )
-                    faculty_page = gr.Textbox(label="Faculty page URL (optional)")
                     cv_file = gr.File(
                         label="CV file (PDF or TXT, max 20 MB)",
                         file_types=[".pdf", ".txt"],
@@ -1249,10 +1245,8 @@ def _build_app() -> gr.Blocks:
                 start_job,
                 inputs=[
                     name,
-                    institution,
                     orcid,
                     submitter_email,
-                    faculty_page,
                     cv_file,
                     access_code,
                 ],
