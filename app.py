@@ -1213,7 +1213,7 @@ def _build_app() -> gr.Blocks:
                         visible=PRIVATE_BETA_ENABLED,
                     )
                     name = gr.Textbox(label="Researcher full name")
-                    institution = gr.Textbox(label="Institution hint (optional)")
+                    institution = gr.Textbox(label="Institution (optional)")
                     orcid = gr.Textbox(label="ORCID (optional)")
                     submitter_email = gr.Textbox(label="Email for notification")
                     access_code = gr.Textbox(
