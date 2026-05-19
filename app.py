@@ -1118,12 +1118,8 @@ def _build_app() -> gr.Blocks:
                 }
             });
         };
-        applyDarkOnly();
-        new MutationObserver(applyDarkOnly).observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-            attributes: true
-        });
+        requestAnimationFrame(applyDarkOnly);
+        [250, 1000, 2500].forEach((delay) => window.setTimeout(applyDarkOnly, delay));
     }
     """
     with gr.Blocks(title=CONTENT["brand"], css=css, theme=theme, js=force_dark_js) as demo:
