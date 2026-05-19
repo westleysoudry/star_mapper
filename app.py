@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import smtplib
+import tempfile
 import threading
 import uuid
 import zipfile
@@ -15,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import gradio as gr
+import httpx
+import pandas as pd
 import yaml
 from huggingface_hub import HfApi, hf_hub_download
 
@@ -22,7 +25,7 @@ from researcher_mapper.parsers.cv_parser import parse_cv
 from researcher_mapper.pipelines.run_target import run_target
 
 
-DATA_ROOT = Path(os.getenv("DATA_ROOT", "/tmp/academic_star_map"))
+DATA_ROOT = Path(os.getenv("DATA_ROOT") or Path(tempfile.gettempdir()) / "academic_star_map")
 JOBS_PATH = DATA_ROOT / "jobs.json"
 RUNS_DIR = DATA_ROOT / "runs"
 MAX_CV_BYTES = int(os.getenv("MAX_CV_BYTES", str(20 * 1024 * 1024)))
@@ -134,6 +137,14 @@ def _result_zip_path(job_id: str) -> Path:
     return _job_dir(job_id) / f"academic-star-map-{job_id}.zip"
 
 
+def _result_starmap_path(job_id: str) -> Path:
+    return _job_dir(job_id) / f"academic-star-map-{job_id}.html"
+
+
+def _result_excel_path(job_id: str) -> Path:
+    return _job_dir(job_id) / f"academic-star-map-{job_id}.xlsx"
+
+
 def _repo_enabled() -> bool:
     return bool(HF_RESULTS_REPO and HF_DATA_TOKEN)
 
@@ -182,7 +193,7 @@ def _download_metadata(job_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _download_result_from_repo(job_id: str, path_in_repo: str) -> Path | None:
+def _download_file_from_repo(path_in_repo: str, target: Path) -> Path | None:
     if not _repo_enabled() or not path_in_repo:
         return None
     try:
@@ -192,12 +203,15 @@ def _download_result_from_repo(job_id: str, path_in_repo: str) -> Path | None:
             repo_type="dataset",
             token=HF_DATA_TOKEN,
         )
-        target = _result_zip_path(job_id)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(local, target)
         return target
     except Exception:
         return None
+
+
+def _download_result_from_repo(job_id: str, path_in_repo: str) -> Path | None:
+    return _download_file_from_repo(path_in_repo, _result_zip_path(job_id))
 
 
 def _delete_repo_file(path_in_repo: str | None) -> None:
@@ -225,15 +239,43 @@ def _make_download_url(job_id: str) -> str:
     return f"{base.rstrip('/')}/?job={job_id}"
 
 
+def _send_brevo_email(to_addr: str, body: str) -> str | None:
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key:
+        return "Brevo API is not configured."
+    mail_from = os.getenv("MAIL_FROM") or os.getenv("SMTP_USERNAME")
+    if not mail_from:
+        return "MAIL_FROM is required for Brevo email delivery."
+
+    payload = {
+        "sender": {
+            "email": mail_from,
+            "name": os.getenv("MAIL_FROM_NAME") or CONTENT["brand"],
+        },
+        "to": [{"email": to_addr}],
+        "subject": CONTENT["email_subject"],
+        "textContent": body,
+    }
+    try:
+        response = httpx.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "accept": "application/json",
+                "api-key": api_key,
+                "content-type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        return None
+    except Exception as exc:
+        return f"Could not send email with Brevo API: {exc}"
+
+
 def _send_ready_email(to_addr: str, job_id: str) -> str | None:
     if not to_addr:
         return "No submitter email was provided."
-    host = os.getenv("SMTP_HOST")
-    username = os.getenv("SMTP_USERNAME")
-    password = os.getenv("SMTP_PASSWORD")
-    mail_from = os.getenv("MAIL_FROM") or username
-    if not all([host, username, password, mail_from]):
-        return "SMTP is not configured; no email was sent."
 
     template_path = Path("content/emails/result_ready.md")
     body = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
@@ -242,6 +284,16 @@ def _send_ready_email(to_addr: str, job_id: str) -> str | None:
         job_id=job_id,
         download_url=_make_download_url(job_id),
     )
+
+    if os.getenv("BREVO_API_KEY"):
+        return _send_brevo_email(to_addr, body)
+
+    host = os.getenv("SMTP_HOST")
+    username = os.getenv("SMTP_USERNAME")
+    password = os.getenv("SMTP_PASSWORD")
+    mail_from = os.getenv("MAIL_FROM") or username
+    if not all([host, username, password, mail_from]):
+        return "Email is not configured; no email was sent."
 
     msg = EmailMessage()
     msg["Subject"] = CONTENT["email_subject"]
@@ -258,6 +310,47 @@ def _send_ready_email(to_addr: str, job_id: str) -> str | None:
         return None
     except Exception as exc:
         return f"Could not send email: {exc}"
+
+
+def _first_existing(paths: list[Path]) -> Path | None:
+    for path in paths:
+        if str(path) and path.is_file():
+            return path
+    return None
+
+
+def _find_first(run_dir: Path, pattern: str) -> Path | None:
+    return next((path for path in sorted(run_dir.glob(pattern)) if path.is_file()), None)
+
+
+def _build_combined_excel(run_dir: Path, output_path: Path) -> Path:
+    israel_csv = _find_first(run_dir, "israel_top*.csv")
+    world_csv = _find_first(run_dir, "world_top*.csv")
+    if not israel_csv or not world_csv:
+        missing = []
+        if not israel_csv:
+            missing.append("Israel CSV")
+        if not world_csv:
+            missing.append("World CSV")
+        raise FileNotFoundError(f"Missing {', '.join(missing)} output.")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        pd.read_csv(israel_csv).to_excel(writer, sheet_name="Israel", index=False)
+        pd.read_csv(world_csv).to_excel(writer, sheet_name="World", index=False)
+        for sheet in writer.sheets.values():
+            sheet.freeze_panes = "A2"
+            for column_cells in sheet.columns:
+                header = str(column_cells[0].value or "")
+                max_len = max(
+                    [len(header)]
+                    + [len(str(cell.value or "")) for cell in column_cells[1:]]
+                )
+                sheet.column_dimensions[column_cells[0].column_letter].width = min(
+                    max(max_len + 2, 10),
+                    42,
+                )
+    return output_path
 
 
 def _zip_directory(source_dir: Path, zip_path: Path) -> None:
@@ -285,6 +378,8 @@ def _cleanup_expired_jobs() -> None:
         if expires_at and _now() >= expires_at:
             shutil.rmtree(_job_dir(job_id), ignore_errors=True)
             _delete_repo_file(record.get("artifact_repo_path"))
+            _delete_repo_file(record.get("starmap_repo_path"))
+            _delete_repo_file(record.get("excel_repo_path"))
             record["status"] = "expired"
             record["expired_at"] = _iso()
             changed = True
@@ -330,9 +425,22 @@ def _run_job(
 
         graph_path = Path(result.get("graph_path", ""))
         run_dir = graph_path.parent if graph_path else pipeline_dir
-        zip_path = _result_zip_path(job_id)
-        _zip_directory(run_dir, zip_path)
-        artifact_path = _upload_file(zip_path, f"results/{job_id}/{zip_path.name}")
+        starmap_src = _first_existing(
+            [
+                Path(result.get("star_map_path", "")),
+                run_dir / "star_map.html",
+            ]
+        )
+        if not starmap_src:
+            raise FileNotFoundError("The star map HTML output was not created.")
+
+        starmap_path = _result_starmap_path(job_id)
+        starmap_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(starmap_src, starmap_path)
+
+        excel_path = _build_combined_excel(run_dir, _result_excel_path(job_id))
+        starmap_artifact = _upload_file(starmap_path, f"results/{job_id}/{starmap_path.name}")
+        excel_artifact = _upload_file(excel_path, f"results/{job_id}/{excel_path.name}")
 
         warning = _send_ready_email(email, job_id)
         _update_job(
@@ -340,8 +448,10 @@ def _run_job(
             status="completed",
             message="Ready to download",
             completed_at=_iso(),
-            result_zip=str(zip_path),
-            artifact_repo_path=artifact_path,
+            starmap_path=str(starmap_path),
+            excel_path=str(excel_path),
+            starmap_repo_path=starmap_artifact,
+            excel_repo_path=excel_artifact,
             email_warning=warning,
         )
     except Exception as exc:
@@ -415,7 +525,7 @@ def start_job(
         retain_cv=retain_allowed,
     )
     return (
-        f"Job `{job_id}` is queued. You can close the page; an email will be sent when the archive is ready.",
+        f"Job `{job_id}` is queued. You can close the page; a notification email will be sent if email delivery is configured.",
         job_id,
     )
 
@@ -431,15 +541,27 @@ def check_status(job_id: str) -> str:
     if message:
         lines.append(f"**Message:** {message}")
     if status == "completed":
-        lines.append("The result archive is ready. Use **Download result** below.")
+        lines.append("The starmap and Excel file are ready.")
         if record.get("email_warning"):
             lines.append(f"Email note: {record['email_warning']}")
     if status == "expired":
-        lines.append("This result archive has expired and was deleted.")
+        lines.append("These result files have expired and were deleted.")
     return "\n\n".join(lines)
 
 
-def download_result(job_id: str) -> tuple[str | None, str]:
+def _mark_downloaded(job_id: str, record: dict[str, Any]) -> None:
+    if not record.get("downloaded_at"):
+        _update_job(job_id, downloaded_at=_iso())
+
+
+def _download_named_result(
+    job_id: str,
+    *,
+    local_key: str,
+    repo_key: str,
+    target_path: Path,
+    label: str,
+) -> tuple[str | None, str]:
     _cleanup_expired_jobs()
     record = _get_job(job_id)
     if not record:
@@ -447,71 +569,211 @@ def download_result(job_id: str) -> tuple[str | None, str]:
     if record.get("status") != "completed":
         return None, f"Job is not ready yet. Current status: {record.get('status')}"
 
-    zip_path = Path(record.get("result_zip") or _result_zip_path(job_id))
-    if not zip_path.exists():
-        zip_path = _download_result_from_repo(job_id, record.get("artifact_repo_path", "")) or zip_path
-    if not zip_path.exists():
-        return None, "The result archive is missing. Please contact the site owner."
+    local_path = Path(record.get(local_key) or target_path)
+    if not local_path.exists():
+        local_path = (
+            _download_file_from_repo(record.get(repo_key, ""), target_path)
+            or local_path
+        )
+    if not local_path.exists():
+        return None, f"The {label} file is missing. Please contact the site owner."
 
-    if not record.get("downloaded_at"):
-        _update_job(job_id, downloaded_at=_iso())
-    return str(zip_path), "Download started. This archive will be deleted 1 day after download."
+    _mark_downloaded(job_id, record)
+    return str(local_path), f"Download started. These files will be deleted {RESULT_DELETE_AFTER_DOWNLOAD_DAYS} day after the first download."
+
+
+def download_starmap(job_id: str) -> tuple[str | None, str]:
+    return _download_named_result(
+        job_id,
+        local_key="starmap_path",
+        repo_key="starmap_repo_path",
+        target_path=_result_starmap_path(job_id),
+        label="starmap",
+    )
+
+
+def download_excel(job_id: str) -> tuple[str | None, str]:
+    return _download_named_result(
+        job_id,
+        local_key="excel_path",
+        repo_key="excel_repo_path",
+        target_path=_result_excel_path(job_id),
+        label="Excel",
+    )
 
 
 def _build_app() -> gr.Blocks:
     css = """
-    body { background: #f8fafc; }
-    .asm-wrap { max-width: 980px; margin: 0 auto; }
+    body {
+        background: #f5f7f3;
+    }
+    .gradio-container {
+        max-width: none !important;
+        background: transparent !important;
+    }
+    .asm-shell {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 22px 18px 30px;
+    }
+    .asm-hero {
+        background: #111827;
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 24px 26px;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+    }
+    .asm-hero h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+        line-height: 1.06;
+        letter-spacing: 0;
+    }
+    .asm-hero p {
+        margin: 0;
+        max-width: 760px;
+        color: #dce6ef;
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    .asm-intro {
+        margin: 18px 0;
+        color: #334155;
+        line-height: 1.55;
+    }
+    .asm-grid {
+        gap: 16px;
+        align-items: stretch;
+    }
+    .asm-panel {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #d9e2dc;
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 10px 32px rgba(31, 41, 55, 0.08);
+    }
+    .asm-panel h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        line-height: 1.25;
+        color: #172033;
+        letter-spacing: 0;
+    }
+    .asm-status {
+        min-height: 150px;
+        padding: 14px;
+        background: #f8fafc;
+        border: 1px solid #dce4ee;
+        border-radius: 8px;
+    }
+    .asm-status p {
+        margin-bottom: 8px;
+    }
+    .asm-downloads {
+        gap: 10px;
+    }
+    .asm-downloads button {
+        min-height: 44px;
+        font-weight: 650;
+    }
+    .asm-footer {
+        margin-top: 18px;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+    @media (max-width: 760px) {
+        .asm-shell {
+            padding: 12px;
+        }
+        .asm-hero {
+            padding: 20px;
+        }
+        .asm-hero h1 {
+            font-size: 28px;
+        }
+        .asm-panel {
+            padding: 14px;
+        }
+    }
     """
-    with gr.Blocks(title=CONTENT["brand"], css=css) as demo:
-        gr.Markdown(
-            f"<div class='asm-wrap'><h1>{CONTENT['brand']}</h1>"
-            f"<p><strong>{CONTENT['tagline']}</strong></p></div>"
+    theme = gr.themes.Soft(
+        primary_hue="teal",
+        secondary_hue="amber",
+        neutral_hue="slate",
+        radius_size="sm",
+    )
+    with gr.Blocks(title=CONTENT["brand"], css=css, theme=theme) as demo:
+        gr.HTML(
+            f"""
+            <main class="asm-shell">
+              <section class="asm-hero">
+                <h1>{CONTENT['brand']}</h1>
+                <p>{CONTENT['tagline']}</p>
+              </section>
+            </main>
+            """
         )
-        gr.Markdown(CONTENT["intro_md"])
+        with gr.Column(elem_classes=["asm-shell"]):
+            gr.Markdown(CONTENT["intro_md"], elem_classes=["asm-intro"])
 
-        with gr.Row():
-            with gr.Column(scale=1):
-                name = gr.Textbox(label="Researcher full name", placeholder="Daniel Soudry")
-                institution = gr.Textbox(label="Institution hint", placeholder="Technion")
-                orcid = gr.Textbox(label="ORCID", placeholder="0000-0000-0000-0000")
-                submitter_email = gr.Textbox(label="Email for notification")
-                faculty_page = gr.Textbox(label="Faculty page URL")
-                cv_file = gr.File(
-                    label="CV file (PDF or TXT, max 20 MB)",
-                    file_types=[".pdf", ".txt"],
-                    type="filepath",
-                )
-                with gr.Accordion("Admin calibration", open=False):
-                    gr.Markdown(CONTENT["admin_note_md"])
-                    retain_for_calibration = gr.Checkbox(label="Retain this CV for calibration")
-                    admin_token = gr.Textbox(label="Admin token", type="password")
-                submit = gr.Button("Create star map", variant="primary")
-            with gr.Column(scale=1):
-                job_id = gr.Textbox(label="Job ID")
-                status = gr.Markdown("Submit a CV to start.")
-                check = gr.Button("Check status")
-                download = gr.Button("Download result")
-                result_file = gr.File(label="Result archive")
+            with gr.Row(elem_classes=["asm-grid"]):
+                with gr.Column(scale=1, elem_classes=["asm-panel"]):
+                    gr.HTML("<h2>Submit CV</h2>")
+                    name = gr.Textbox(label="Researcher full name", placeholder="Daniel Soudry")
+                    institution = gr.Textbox(label="Institution hint", placeholder="Technion")
+                    orcid = gr.Textbox(label="ORCID", placeholder="0000-0000-0000-0000")
+                    submitter_email = gr.Textbox(label="Email for notification")
+                    faculty_page = gr.Textbox(label="Faculty page URL")
+                    cv_file = gr.File(
+                        label="CV file (PDF or TXT, max 20 MB)",
+                        file_types=[".pdf", ".txt"],
+                        type="filepath",
+                    )
+                    with gr.Accordion("Admin calibration", open=False):
+                        gr.Markdown(CONTENT["admin_note_md"])
+                        retain_for_calibration = gr.Checkbox(label="Retain this CV for calibration")
+                        admin_token = gr.Textbox(label="Admin token", type="password")
+                    submit = gr.Button("Create star map", variant="primary")
+                with gr.Column(scale=1, elem_classes=["asm-panel"]):
+                    gr.HTML("<h2>Results</h2>")
+                    job_id = gr.Textbox(label="Job ID")
+                    status = gr.Markdown("Submit a CV to start.", elem_classes=["asm-status"])
+                    check = gr.Button("Check status")
+                    with gr.Row(elem_classes=["asm-downloads"]):
+                        download_starmap_btn = gr.Button("Download starmap", variant="primary")
+                        download_excel_btn = gr.Button("Download Excel")
+                    starmap_file = gr.File(label="Starmap HTML")
+                    excel_file = gr.File(label="Excel workbook")
 
-        submit.click(
-            start_job,
-            inputs=[
-                name,
-                institution,
-                orcid,
-                submitter_email,
-                faculty_page,
-                cv_file,
-                retain_for_calibration,
-                admin_token,
-            ],
-            outputs=[status, job_id],
-        )
-        check.click(check_status, inputs=[job_id], outputs=[status])
-        download.click(download_result, inputs=[job_id], outputs=[result_file, status])
+            submit.click(
+                start_job,
+                inputs=[
+                    name,
+                    institution,
+                    orcid,
+                    submitter_email,
+                    faculty_page,
+                    cv_file,
+                    retain_for_calibration,
+                    admin_token,
+                ],
+                outputs=[status, job_id],
+            )
+            check.click(check_status, inputs=[job_id], outputs=[status])
+            download_starmap_btn.click(
+                download_starmap,
+                inputs=[job_id],
+                outputs=[starmap_file, status],
+            )
+            download_excel_btn.click(
+                download_excel,
+                inputs=[job_id],
+                outputs=[excel_file, status],
+            )
 
-        gr.Markdown(CONTENT["privacy_note_md"])
+            gr.Markdown(CONTENT["privacy_note_md"], elem_classes=["asm-footer"])
 
     return demo
 

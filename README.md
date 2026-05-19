@@ -47,11 +47,8 @@ HF_DATA_TOKEN=<token with write access to the private results dataset>
 OPENALEX_API_KEY=<free OpenAlex API key>
 OPENALEX_EMAIL=WestleySoudry@gmail.com
 CROSSREF_MAILTO=WestleySoudry@gmail.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=WestleySoudry@gmail.com
-SMTP_PASSWORD=<Google app password>
 MAIL_FROM=WestleySoudry@gmail.com
+BREVO_API_KEY=<Brevo transactional email API key>
 ADMIN_CALIBRATION_TOKEN=<private admin token>
 PUBLIC_BASE_URL=<your Space URL>
 ```
@@ -60,16 +57,23 @@ Optional:
 
 ```text
 SEMANTIC_SCHOLAR_API_KEY=<Semantic Scholar API key>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=WestleySoudry@gmail.com
+SMTP_PASSWORD=<Google app password>
+MAIL_FROM_NAME=Academic Star Map
 MAX_WORKERS=1
 MAX_CV_BYTES=20971520
 ```
+
+Email delivery prefers the Brevo HTTPS API when `BREVO_API_KEY` is configured. SMTP is kept as a fallback, but some hosting platforms block outbound SMTP ports.
 
 ## Privacy Defaults
 
 - Uploaded CVs are deleted immediately after parsing.
 - If the admin calibration flag is enabled and the admin token is valid, the uploaded CV is retained in the private results dataset under `calibration/`.
-- Result archives are deleted 1 day after download.
-- Result archives are deleted after 7 days if never downloaded.
+- Result files are deleted 1 day after download.
+- Result files are deleted after 7 days if never downloaded.
 
 ## Local Run
 
