@@ -100,6 +100,63 @@ def test_assign_guarantees_same_institution_mentor_when_available():
     assert result[0].assigned_bucket == "dept_mentors"
 
 
+def test_assign_uses_cv_advisor_as_institutional_mentor_when_institution_missing():
+    advisor = _make(
+        "ron_meir",
+        cv_relationship="advisor",
+        same_institution=False,
+        same_department=False,
+        same_area_score=0.05,
+        seniority_score=0.85,
+        bucket_scores=BucketScores(dept_mentors=0.10, recommendation_letter_writers=0.30),
+    )
+    candidates = [
+        advisor,
+        _make("other1", same_area_score=0.80, seniority_score=0.75),
+        _make("other2", same_area_score=0.75, seniority_score=0.72),
+    ]
+    policy = dict(
+        _POLICY,
+        target_list_size=2,
+        dept_mentor_requires_same_department=False,
+        dept_mentor_requires_same_institution=True,
+        min_same_area_for_dept_mentor=0.30,
+    )
+    caps = dict(_CAPS, dept_mentors=1, in_area_collaborators=2)
+
+    result = assign_final_list(candidates, caps, policy, target_size=2)
+
+    assert result[0].candidate_id == "ron_meir"
+    assert result[0].assigned_bucket == "dept_mentors"
+
+
+def test_israel_list_forces_best_available_institutional_mentor_when_no_signal():
+    candidates = [
+        _make(
+            "israeli_senior",
+            israel_affiliated=True,
+            same_area_score=0.45,
+            seniority_score=0.90,
+            bucket_scores=BucketScores(dept_mentors=0.95, area_mentors=0.90),
+        ),
+        _make("israeli_peer", israel_affiliated=True, same_area_score=0.80, seniority_score=0.70),
+        _make("world_peer", country_code="US", same_area_score=0.80, seniority_score=0.80),
+    ]
+    policy = dict(
+        _POLICY,
+        target_list_size=2,
+        dept_mentor_requires_same_department=False,
+        dept_mentor_requires_same_institution=True,
+        min_same_area_for_dept_mentor=0.30,
+    )
+
+    israel_list, world_list = assign_israel_and_world(candidates, _CAPS, policy)
+
+    assert any(c.assigned_bucket == "dept_mentors" for c in israel_list)
+    assert israel_list[0].candidate_id == "israeli_senior"
+    assert not any(c.assigned_bucket == "dept_mentors" for c in world_list)
+
+
 def test_same_institution_ref_matches_technion_subunit_names():
     from researcher_mapper.pipelines.run_target import _same_institution_ref
 

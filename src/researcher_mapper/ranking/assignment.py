@@ -335,10 +335,11 @@ def _supplemental_in_area_sort_key(
 
 def _institutional_mentor_sort_key(
     candidate: CandidateScore,
-) -> tuple[bool, bool, bool, float, float, float, float, str, str]:
+) -> tuple[bool, bool, bool, bool, float, float, float, float, str, str]:
     return (
         candidate.cv_relationship in ("advisor", "postdoc_host"),
         candidate.same_department,
+        candidate.same_institution,
         not candidate.dept_explicitly_different,
         _bucket_score(candidate, "dept_mentors"),
         candidate.seniority_score,
@@ -350,8 +351,14 @@ def _institutional_mentor_sort_key(
 
 
 def _passes_institutional_mentor_fallback(candidate: CandidateScore, policy: dict) -> bool:
-    """Relaxed same-institution fallback used only if no mentor was assigned."""
-    if not candidate.same_institution:
+    """Relaxed fallback used only if no institutional mentor was assigned."""
+    has_institutional_signal = (
+        candidate.same_institution
+        or candidate.same_department
+        or candidate.cv_relationship in ("advisor", "postdoc_host")
+    )
+    force_best_available = policy.get("force_best_available_institutional_mentor", False)
+    if not (has_institutional_signal or force_best_available):
         return False
 
     max_inactivity = policy.get("max_inactivity_years", 10)
@@ -379,7 +386,13 @@ def _passes_institutional_mentor_fallback(candidate: CandidateScore, policy: dic
     ):
         return False
 
-    return candidate.seniority_score >= policy.get("min_seniority_for_mentors", 0.60)
+    if candidate.seniority_score < policy.get("min_seniority_for_mentors", 0.60):
+        return False
+
+    if has_institutional_signal:
+        return True
+
+    return candidate.same_area_score >= policy.get("min_same_area_for_dept_mentor", 0.0)
 
 
 def _find_assigned_index(assigned: list[CandidateScore], candidate_id: str) -> int | None:
@@ -584,8 +597,9 @@ def assign_israel_and_world(
     israel_candidates = [c for c in all_candidates if _currently_in_israel(c)]
     world_candidates = [c for c in all_candidates if not _currently_in_israel(c)]
 
+    israel_policy = dict(policy, force_best_available_institutional_mentor=True)
     israel_list = assign_final_list(
-        israel_candidates, bucket_caps, policy, target_size=target_size
+        israel_candidates, bucket_caps, israel_policy, target_size=target_size
     )
     world_list = assign_final_list(
         world_candidates, bucket_caps, policy, target_size=target_size
