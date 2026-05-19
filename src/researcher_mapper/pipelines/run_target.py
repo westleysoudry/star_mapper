@@ -221,7 +221,17 @@ def _top_shared_topic_ids(
         k: min(target_vec[k], candidate_vec[k])
         for k in set(target_vec) & set(candidate_vec)
     }
-    return sorted(shared, key=lambda k: shared[k], reverse=True)[:top_n]
+    return sorted(shared, key=lambda k: (-shared[k], k))[:top_n]
+
+
+def _score_sort_key(score: CandidateScore) -> tuple[float, float, float, str, str]:
+    return (
+        score.base_similarity,
+        score.same_area_score,
+        score.reputation_score,
+        (score.name or "").lower(),
+        score.candidate_id,
+    )
 
 
 def _match_cv_relationship(candidate_name: str, advisor_names: set[str]) -> str | None:
@@ -270,7 +280,7 @@ def _rerank_with_full_profiles(
     if rerank_top_n <= 0:
         return
 
-    top_scores = sorted(scores, key=lambda c: c.base_similarity, reverse=True)[:rerank_top_n]
+    top_scores = sorted(scores, key=_score_sort_key, reverse=True)[:rerank_top_n]
     ids_to_rerank = [s.candidate_id for s in top_scores]
     log.info("Two-stage rerank: fetching full profiles for top %d candidates …", len(ids_to_rerank))
 
@@ -294,7 +304,10 @@ def _rerank_with_full_profiles(
     log.info("Two-stage rerank: refreshed %d/%d profiles", len(full_profiles), len(ids_to_rerank))
 
     score_map = {s.candidate_id: s for s in scores}
-    for cand_id, profile in full_profiles.items():
+    for cand_id in ids_to_rerank:
+        profile = full_profiles.get(cand_id)
+        if profile is None:
+            continue
         score = score_map.get(cand_id)
         if score is None:
             continue
@@ -778,7 +791,7 @@ def run_target(
         all_candidate_scores.append(score)
 
     # Sort by base similarity for overflow assignment
-    all_candidate_scores.sort(key=lambda c: c.base_similarity, reverse=True)
+    all_candidate_scores.sort(key=_score_sort_key, reverse=True)
 
     _check_stop(stop_event)
     # ── Step 7b: two-stage rerank with full publication profiles ──────────────
@@ -796,7 +809,7 @@ def run_target(
             rerank_top_n=rerank_top_n,
             stop_event=stop_event,
         )
-        all_candidate_scores.sort(key=lambda c: c.base_similarity, reverse=True)
+        all_candidate_scores.sort(key=_score_sort_key, reverse=True)
 
     _check_stop(stop_event)
     # ── Step 8: assign final Israel + World lists ─────────────────────────────
@@ -942,13 +955,15 @@ def _apply_cv_data(profile: ResearcherProfile, cv) -> None:
 
     # Research interests: always append (used for candidate search topic boost)
     if cv.research_interests:
-        existing = set(profile.cv_research_interests)
-        profile.cv_research_interests = list(existing | set(cv.research_interests))
+        profile.cv_research_interests = sorted(
+            set(profile.cv_research_interests) | set(cv.research_interests)
+        )
 
     # Known advisors / postdoc hosts: merge into profile
     if cv.known_advisors:
-        existing_adv = set(profile.known_cv_advisors)
-        profile.known_cv_advisors = list(existing_adv | set(cv.known_advisors))
+        profile.known_cv_advisors = sorted(
+            set(profile.known_cv_advisors) | set(cv.known_advisors)
+        )
 
     # Institution: fill if missing from OpenAlex
     if cv.institution and profile.current_institution is None:

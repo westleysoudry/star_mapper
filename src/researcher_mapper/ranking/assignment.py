@@ -210,6 +210,15 @@ def _bucket_score(candidate: CandidateScore, bucket: str) -> float:
     return getattr(candidate.bucket_scores, bucket, 0.0)
 
 
+def _candidate_tiebreaker(candidate: CandidateScore) -> tuple[float, float, str, str]:
+    return (
+        candidate.base_similarity,
+        candidate.reputation_score,
+        (candidate.name or "").lower(),
+        candidate.candidate_id,
+    )
+
+
 def _effective_bucket_caps(
     bucket_caps: dict[str, int],
     policy: dict,
@@ -311,18 +320,22 @@ def passes_supplemental_in_area_filters(candidate: CandidateScore, policy: dict)
     )
 
 
-def _supplemental_in_area_sort_key(candidate: CandidateScore) -> tuple[float, float, float, float]:
+def _supplemental_in_area_sort_key(
+    candidate: CandidateScore,
+) -> tuple[float, float, float, float, str, str]:
     return (
         _bucket_score(candidate, "in_area_collaborators"),
         candidate.same_area_score,
         candidate.base_similarity,
         candidate.reputation_score,
+        (candidate.name or "").lower(),
+        candidate.candidate_id,
     )
 
 
 def _institutional_mentor_sort_key(
     candidate: CandidateScore,
-) -> tuple[bool, bool, bool, float, float, float, float]:
+) -> tuple[bool, bool, bool, float, float, float, float, str, str]:
     return (
         candidate.cv_relationship in ("advisor", "postdoc_host"),
         candidate.same_department,
@@ -331,6 +344,8 @@ def _institutional_mentor_sort_key(
         candidate.seniority_score,
         candidate.reputation_score,
         candidate.same_area_score,
+        (candidate.name or "").lower(),
+        candidate.candidate_id,
     )
 
 
@@ -464,13 +479,17 @@ def assign_final_list(
                 key=lambda c: (
                     c.cv_relationship in ("advisor", "postdoc_host"),
                     _bucket_score(c, bucket),
+                    *_candidate_tiebreaker(c),
                 ),
                 reverse=True,
             )
         elif bucket == "dept_mentors":
             eligible.sort(key=_institutional_mentor_sort_key, reverse=True)
         else:
-            eligible.sort(key=lambda c: _bucket_score(c, bucket), reverse=True)
+            eligible.sort(
+                key=lambda c: (_bucket_score(c, bucket), *_candidate_tiebreaker(c)),
+                reverse=True,
+            )
 
         bucket_added = 0
         for c in eligible[:cap]:

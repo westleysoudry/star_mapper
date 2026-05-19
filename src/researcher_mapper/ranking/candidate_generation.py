@@ -55,12 +55,15 @@ _ADAPTIVE_POOL_DIVISOR = 20
 def _get_top_topic_ids(publications: list[Publication], n: int = 5) -> list[str]:
     """Return the top-n T-prefixed topic IDs from the target's publication record."""
     topic_vec = build_topic_vector(publications)
-    return [tid for tid, _ in sorted(topic_vec.items(), key=lambda x: x[1], reverse=True)[:n]]
+    return [
+        tid
+        for tid, _ in sorted(topic_vec.items(), key=lambda x: (-x[1], x[0]))[:n]
+    ]
 
 
 def _get_top_concept_ids(profile: ResearcherProfile, n: int = 3) -> list[str]:
     """Return the top-n C-prefixed concept IDs from the target's author profile."""
-    sorted_concepts = sorted(profile.top_concepts.items(), key=lambda x: x[1], reverse=True)
+    sorted_concepts = sorted(profile.top_concepts.items(), key=lambda x: (-x[1], x[0]))
     return [cid for cid, _ in sorted_concepts[:n]]
 
 
@@ -74,7 +77,7 @@ def _extract_coauthor_ids(
             # aid is a full URL (https://openalex.org/A...) — compare normalized
             if aid and aid.split("/")[-1] != target_openalex_id.split("/")[-1]:
                 seen[aid] = seen.get(aid, 0) + 1
-    return [aid for aid, _ in sorted(seen.items(), key=lambda x: x[1], reverse=True)]
+    return [aid for aid, _ in sorted(seen.items(), key=lambda x: (-x[1], x[0]))]
 
 
 def _extract_cited_author_ids(
@@ -92,7 +95,7 @@ def _extract_cited_author_ids(
                 all_ref_ids.add(ref_id)
     if not all_ref_ids:
         return []
-    short_ids = [rid.split("/")[-1] for rid in all_ref_ids if rid.split("/")[-1]]
+    short_ids = sorted(rid.split("/")[-1] for rid in all_ref_ids if rid.split("/")[-1])
     author_ids: set[str] = set()
     batch_size = 50
     for i in range(0, len(short_ids), batch_size):
@@ -113,7 +116,7 @@ def _extract_cited_author_ids(
                         author_ids.add(aid)
         except Exception:
             continue
-    return list(author_ids)
+    return sorted(author_ids)
 
 
 def retrieve_candidate_pool(
