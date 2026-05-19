@@ -28,6 +28,14 @@ jobs:
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE_REPO"]
           api = HfApi()
+          api.create_repo(
+              repo_id=repo_id,
+              repo_type="space",
+              space_sdk="docker",
+              private=True,
+              exist_ok=True,
+              token=token,
+          )
           api.upload_folder(
               folder_path=".",
               repo_id=repo_id,
