@@ -304,6 +304,54 @@ def _send_brevo_email(
         return f"Could not send email with Brevo API: {exc}"
 
 
+def _send_resend_email(
+    to_addr: str,
+    *,
+    subject: str,
+    body: str,
+    attachments: list[Path] | None = None,
+) -> str | None:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        return "Resend API is not configured."
+    mail_from = os.getenv("MAIL_FROM")
+    if not mail_from:
+        return "MAIL_FROM is required for Resend email delivery."
+
+    payload: dict[str, Any] = {
+        "from": mail_from,
+        "to": [to_addr],
+        "subject": subject,
+        "text": body,
+    }
+    attachment_payloads = []
+    for path in attachments or []:
+        if path.exists() and path.is_file():
+            attachment_payloads.append(
+                {
+                    "filename": path.name,
+                    "content": base64.b64encode(path.read_bytes()).decode("ascii"),
+                }
+            )
+    if attachment_payloads:
+        payload["attachments"] = attachment_payloads
+
+    try:
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        return None
+    except Exception as exc:
+        return f"Could not send email with Resend API: {exc}"
+
+
 def _send_smtp_email(
     to_addr: str,
     *,
@@ -355,6 +403,13 @@ def _send_email(
 ) -> str | None:
     if not to_addr:
         return "No submitter email was provided."
+    if os.getenv("RESEND_API_KEY"):
+        return _send_resend_email(
+            to_addr,
+            subject=subject,
+            body=body,
+            attachments=attachments,
+        )
     if os.getenv("BREVO_API_KEY"):
         return _send_brevo_email(
             to_addr,
@@ -363,7 +418,7 @@ def _send_email(
             attachments=attachments,
         )
     if EMAIL_BACKEND != "smtp":
-        return "Email API is not configured; add BREVO_API_KEY to the Space secrets."
+        return "Email API is not configured; add RESEND_API_KEY or BREVO_API_KEY to the Space secrets."
     return _send_smtp_email(
         to_addr,
         subject=subject,
@@ -582,24 +637,29 @@ def start_job(
     submitter_email: str,
     faculty_page: str,
     cv_file: str,
-) -> tuple[str, str]:
+) -> tuple[str, str, Any, Any]:
     _cleanup_expired_jobs()
     name = (name or "").strip()
     submitter_email = (submitter_email or "").strip()
     if not name:
-        return "Please enter the researcher's full name.", ""
+        return "Please enter the researcher's full name.", "", gr.update(value=None), gr.update(value=None)
     if not submitter_email:
-        return "Please enter an email address so the site can notify you.", ""
+        return "Please enter an email address so the site can notify you.", "", gr.update(value=None), gr.update(value=None)
     if not cv_file:
-        return "Please upload a CV file.", ""
+        return "Please upload a CV file.", "", gr.update(value=None), gr.update(value=None)
 
     src = Path(cv_file)
     if not src.exists():
-        return "The uploaded CV file could not be read.", ""
+        return "The uploaded CV file could not be read.", "", gr.update(value=None), gr.update(value=None)
     if src.stat().st_size > MAX_CV_BYTES:
-        return f"CV is too large. Maximum size is {MAX_CV_BYTES // (1024 * 1024)} MB.", ""
+        return (
+            f"CV is too large. Maximum size is {MAX_CV_BYTES // (1024 * 1024)} MB.",
+            "",
+            gr.update(value=None),
+            gr.update(value=None),
+        )
     if src.suffix.lower() not in {".pdf", ".txt"}:
-        return "Please upload a PDF or plain-text CV.", ""
+        return "Please upload a PDF or plain-text CV.", "", gr.update(value=None), gr.update(value=None)
 
     job_id = uuid.uuid4().hex[:12]
     input_dir = _job_dir(job_id) / "input"
@@ -629,6 +689,8 @@ def start_job(
     return (
         f"Job `{job_id}` is queued. You can close the page; a notification email will be sent if email delivery is configured.",
         job_id,
+        gr.update(value=None),
+        gr.update(value=None),
     )
 
 
@@ -651,6 +713,44 @@ def check_status(job_id: str) -> str:
     return "\n\n".join(lines)
 
 
+def _download_button_updates(job_id: str) -> tuple[Any, Any]:
+    record = _get_job(job_id)
+    if not record or record.get("status") != "completed":
+        return gr.update(value=None), gr.update(value=None)
+    try:
+        starmap_path = _prepare_named_result(
+            job_id,
+            local_key="starmap_path",
+            repo_key="starmap_repo_path",
+            target_path=_result_starmap_path(job_id),
+            label="starmap",
+            mark_downloaded=False,
+        )
+    except gr.Error:
+        starmap_path = None
+    try:
+        excel_path = _prepare_named_result(
+            job_id,
+            local_key="excel_path",
+            repo_key="excel_repo_path",
+            target_path=_result_excel_path(job_id),
+            label="Excel",
+            mark_downloaded=False,
+        )
+    except gr.Error:
+        excel_path = None
+    return (
+        gr.update(value=str(starmap_path) if starmap_path else None),
+        gr.update(value=str(excel_path) if excel_path else None),
+    )
+
+
+def check_status_and_downloads(job_id: str) -> tuple[str, Any, Any]:
+    status_text = check_status(job_id)
+    starmap_update, excel_update = _download_button_updates(job_id)
+    return status_text, starmap_update, excel_update
+
+
 def _mark_downloaded(job_id: str, record: dict[str, Any]) -> None:
     if not record.get("downloaded_at"):
         _update_job(job_id, downloaded_at=_iso())
@@ -663,6 +763,7 @@ def _prepare_named_result(
     repo_key: str,
     target_path: Path,
     label: str,
+    mark_downloaded: bool = True,
 ) -> Path | None:
     job_id = (job_id or "").strip()
     if not job_id:
@@ -687,7 +788,8 @@ def _prepare_named_result(
     if local_path.suffix.lower() != target_path.suffix.lower():
         raise gr.Error(f"The {label} artifact has the wrong file type. Please rerun the job.")
 
-    _mark_downloaded(job_id, record)
+    if mark_downloaded:
+        _mark_downloaded(job_id, record)
     return local_path
 
 
@@ -997,16 +1099,14 @@ def _build_app() -> gr.Blocks:
                     status = gr.Markdown("Submit a CV to start.", elem_classes=["asm-status"])
                     check = gr.Button("Check status")
                     with gr.Row(elem_classes=["asm-downloads"]):
-                        gr.DownloadButton(
+                        download_starmap_btn = gr.DownloadButton(
                             "Download starmap",
-                            value=download_starmap,
-                            inputs=[job_id],
+                            value=None,
                             variant="secondary",
                         )
-                        gr.DownloadButton(
+                        download_excel_btn = gr.DownloadButton(
                             "Download Excel",
-                            value=download_excel,
-                            inputs=[job_id],
+                            value=None,
                             variant="secondary",
                         )
 
@@ -1020,9 +1120,13 @@ def _build_app() -> gr.Blocks:
                     faculty_page,
                     cv_file,
                 ],
-                outputs=[status, job_id],
+                outputs=[status, job_id, download_starmap_btn, download_excel_btn],
             )
-            check.click(check_status, inputs=[job_id], outputs=[status])
+            check.click(
+                check_status_and_downloads,
+                inputs=[job_id],
+                outputs=[status, download_starmap_btn, download_excel_btn],
+            )
 
             gr.Markdown(CONTENT["privacy_note_md"], elem_classes=["asm-footer"])
 

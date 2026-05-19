@@ -48,7 +48,8 @@ OPENALEX_API_KEY=<free OpenAlex API key>
 OPENALEX_EMAIL=WestleySoudry@gmail.com
 CROSSREF_MAILTO=WestleySoudry@gmail.com
 MAIL_FROM=WestleySoudry@gmail.com
-BREVO_API_KEY=<Brevo transactional email API key>
+RESEND_API_KEY=<Resend email API key>
+# or BREVO_API_KEY=<Brevo transactional email API key>
 PUBLIC_BASE_URL=<your Space URL>
 ADMIN_COPY_ENABLED=true
 ADMIN_COPY_EMAIL=westleysoudry@gmail.com
@@ -68,7 +69,7 @@ MAX_WORKERS=1
 MAX_CV_BYTES=20971520
 ```
 
-Email delivery uses the Brevo HTTPS API by default because some hosting platforms block outbound SMTP ports. SMTP is only used when `EMAIL_BACKEND=smtp`.
+Email delivery uses an HTTPS email API by default because some hosting platforms block outbound SMTP ports. Add `RESEND_API_KEY` or `BREVO_API_KEY`; SMTP is only used when `EMAIL_BACKEND=smtp`.
 
 ## Privacy Defaults
 
