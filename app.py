@@ -721,9 +721,10 @@ def _build_app() -> gr.Blocks:
         z-index: 0;
         pointer-events: none;
         background:
-            radial-gradient(circle at 18% 28%, rgba(80, 210, 190, 0.22), transparent 13rem),
-            radial-gradient(circle at 78% 78%, rgba(205, 85, 210, 0.16), transparent 15rem),
-            radial-gradient(circle at 70% 18%, rgba(150, 230, 90, 0.14), transparent 14rem),
+            radial-gradient(circle at 18% 28%, rgba(80, 210, 190, 0.18), transparent 13rem),
+            radial-gradient(circle at 78% 78%, rgba(205, 85, 210, 0.13), transparent 15rem),
+            radial-gradient(circle at 70% 18%, rgba(150, 230, 90, 0.11), transparent 14rem),
+            radial-gradient(circle at 84% 46%, rgba(255, 142, 92, 0.11), transparent 12rem),
             #080a14;
     }
     .asm-space-bg::before,
@@ -731,37 +732,85 @@ def _build_app() -> gr.Blocks:
         content: "";
         position: absolute;
         inset: 0;
-        background-repeat: repeat;
+        background-repeat: no-repeat;
     }
     .asm-space-bg::before {
-        opacity: 0.72;
+        opacity: 0.82;
         background-image:
-            radial-gradient(circle, rgba(255,255,255,0.88) 0 1.2px, transparent 1.8px),
-            radial-gradient(circle, rgba(140,217,255,0.58) 0 1px, transparent 1.7px),
-            radial-gradient(circle, rgba(255,255,255,0.30) 0 1px, transparent 1.6px);
-        background-size: 86px 86px, 132px 132px, 214px 214px;
-        background-position: 6px 20px, 44px 72px, 120px 30px;
+            radial-gradient(circle at 3% 74%, rgba(255,255,255,0.58) 0 1px, transparent 2px),
+            radial-gradient(circle at 7% 18%, rgba(255,255,255,0.34) 0 1px, transparent 2px),
+            radial-gradient(circle at 11% 43%, rgba(140,217,255,0.42) 0 1.2px, transparent 2.4px),
+            radial-gradient(circle at 14% 86%, rgba(255,255,255,0.26) 0 1px, transparent 2px),
+            radial-gradient(circle at 19% 11%, rgba(255,255,255,0.42) 0 1px, transparent 2px),
+            radial-gradient(circle at 23% 67%, rgba(255,255,255,0.36) 0 1.1px, transparent 2.2px),
+            radial-gradient(circle at 27% 31%, rgba(255,255,255,0.30) 0 1px, transparent 2px),
+            radial-gradient(circle at 31% 79%, rgba(140,217,255,0.44) 0 1.3px, transparent 2.6px),
+            radial-gradient(circle at 34% 16%, rgba(255,255,255,0.22) 0 1px, transparent 2px),
+            radial-gradient(circle at 39% 53%, rgba(255,255,255,0.50) 0 1.4px, transparent 2.8px),
+            radial-gradient(circle at 44% 92%, rgba(255,255,255,0.34) 0 1px, transparent 2px),
+            radial-gradient(circle at 49% 24%, rgba(255,217,0,0.30) 0 1.1px, transparent 2.3px),
+            radial-gradient(circle at 54% 70%, rgba(255,255,255,0.42) 0 1px, transparent 2px),
+            radial-gradient(circle at 58% 38%, rgba(255,255,255,0.28) 0 1px, transparent 2px),
+            radial-gradient(circle at 62% 8%, rgba(140,217,255,0.36) 0 1.2px, transparent 2.4px),
+            radial-gradient(circle at 68% 58%, rgba(255,255,255,0.52) 0 1.4px, transparent 2.8px),
+            radial-gradient(circle at 73% 29%, rgba(255,255,255,0.32) 0 1px, transparent 2px),
+            radial-gradient(circle at 77% 84%, rgba(255,255,255,0.42) 0 1.1px, transparent 2.2px),
+            radial-gradient(circle at 82% 12%, rgba(255,255,255,0.48) 0 1px, transparent 2px),
+            radial-gradient(circle at 88% 64%, rgba(140,217,255,0.38) 0 1.3px, transparent 2.6px),
+            radial-gradient(circle at 94% 36%, rgba(255,255,255,0.30) 0 1px, transparent 2px),
+            radial-gradient(circle at 97% 91%, rgba(255,255,255,0.36) 0 1.1px, transparent 2.2px);
     }
     .asm-space-bg::after {
-        opacity: 0.48;
+        opacity: 0.72;
         background-image:
-            radial-gradient(circle, rgba(255,255,255,0.96) 0 1.8px, transparent 2.6px),
-            radial-gradient(circle, rgba(255,217,0,0.42) 0 1.3px, transparent 2px);
-        background-size: 310px 310px, 430px 430px;
-        background-position: 120px 80px, 260px 210px;
+            radial-gradient(circle at 5% 32%, rgba(255,255,255,0.20) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 9% 58%, rgba(255,255,255,0.24) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 16% 22%, rgba(255,255,255,0.16) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 21% 74%, rgba(255,255,255,0.20) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 29% 7%, rgba(255,255,255,0.22) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 33% 61%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 41% 34%, rgba(255,255,255,0.26) 0 0.9px, transparent 1.9px),
+            radial-gradient(circle at 47% 81%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 52% 13%, rgba(255,255,255,0.22) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 57% 49%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 64% 76%, rgba(255,255,255,0.28) 0 0.9px, transparent 1.9px),
+            radial-gradient(circle at 69% 40%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 75% 6%, rgba(255,255,255,0.22) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 81% 53%, rgba(255,255,255,0.20) 0 0.8px, transparent 1.8px),
+            radial-gradient(circle at 86% 25%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px),
+            radial-gradient(circle at 91% 78%, rgba(255,255,255,0.26) 0 0.9px, transparent 1.9px),
+            radial-gradient(circle at 96% 14%, rgba(255,255,255,0.18) 0 0.7px, transparent 1.7px);
     }
     .asm-comet {
         position: fixed;
-        top: 15%;
-        left: 10%;
-        width: 150px;
+        width: 120px;
         height: 2px;
         z-index: 1;
         pointer-events: none;
+        transform-origin: center;
+        background: linear-gradient(90deg, transparent, rgba(210, 235, 255, 0.36), rgba(255,255,255,0.70));
+        filter: drop-shadow(0 0 5px rgba(140,217,255,0.24));
+        opacity: 0.34;
+    }
+    .asm-comet.one {
+        top: 17%;
+        left: 9%;
+        width: 150px;
         transform: rotate(21deg);
-        background: linear-gradient(90deg, transparent, rgba(210, 235, 255, 0.72), rgba(255,255,255,0.95));
-        filter: drop-shadow(0 0 7px rgba(140,217,255,0.55));
-        opacity: 0.70;
+    }
+    .asm-comet.two {
+        top: 48%;
+        right: 12%;
+        width: 92px;
+        transform: rotate(-18deg);
+        opacity: 0.22;
+    }
+    .asm-comet.three {
+        bottom: 14%;
+        left: 24%;
+        width: 72px;
+        transform: rotate(12deg);
+        opacity: 0.18;
     }
     .asm-shell,
     .asm-hero,
@@ -777,7 +826,7 @@ def _build_app() -> gr.Blocks:
     .asm-hero {
         background: rgba(8, 10, 20, 0.80);
         color: #f8fafc;
-        border: 1px solid rgba(140, 217, 255, 0.24);
+        border: 1px solid rgba(210, 225, 245, 0.16);
         border-radius: 8px;
         padding: 24px 26px;
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
@@ -807,7 +856,7 @@ def _build_app() -> gr.Blocks:
     }
     .asm-panel {
         background: rgba(15, 22, 38, 0.84);
-        border: 1px solid rgba(140, 217, 255, 0.22);
+        border: 1px solid rgba(210, 225, 245, 0.14);
         border-radius: 8px;
         padding: 18px;
         box-shadow: 0 12px 36px rgba(0, 0, 0, 0.34);
@@ -816,7 +865,7 @@ def _build_app() -> gr.Blocks:
         margin: 0 0 12px;
         font-size: 18px;
         line-height: 1.25;
-        color: #8cd9ff;
+        color: #d9e7f5;
         letter-spacing: 0;
     }
     .asm-status {
@@ -839,19 +888,19 @@ def _build_app() -> gr.Blocks:
     }
     .asm-panel button,
     .asm-panel button.primary {
-        background: rgba(18, 30, 48, 0.92) !important;
-        border: 1px solid rgba(140, 217, 255, 0.38) !important;
-        color: #e8f7ff !important;
-        box-shadow: 0 0 18px rgba(140, 217, 255, 0.12) !important;
+        background: rgba(16, 22, 35, 0.94) !important;
+        border: 1px solid rgba(220, 230, 245, 0.20) !important;
+        color: #d8e0ee !important;
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.04) !important;
     }
     .asm-panel button:hover,
     .asm-panel button.primary:hover {
-        background: rgba(28, 44, 70, 0.96) !important;
-        border-color: rgba(243, 217, 77, 0.46) !important;
-        color: #ffffff !important;
+        background: rgba(24, 31, 48, 0.98) !important;
+        border-color: rgba(243, 217, 77, 0.32) !important;
+        color: #f3f6fb !important;
     }
     .asm-downloads button:first-child {
-        background: rgba(27, 63, 76, 0.90) !important;
+        background: rgba(18, 28, 42, 0.94) !important;
     }
     .asm-panel label,
     .asm-panel span,
@@ -902,7 +951,9 @@ def _build_app() -> gr.Blocks:
         gr.HTML(
             f"""
             <div class="asm-space-bg" aria-hidden="true"></div>
-            <div class="asm-comet" aria-hidden="true"></div>
+            <div class="asm-comet one" aria-hidden="true"></div>
+            <div class="asm-comet two" aria-hidden="true"></div>
+            <div class="asm-comet three" aria-hidden="true"></div>
             <main class="asm-shell">
               <section class="asm-hero">
                 <h1>{CONTENT['brand']}</h1>
