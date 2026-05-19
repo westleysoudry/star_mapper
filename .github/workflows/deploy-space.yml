@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  HF_SPACE_REPO: westleysoudry/academic-star-map
+  HF_SPACE_REPO: ${{ vars.HF_SPACE_REPO || 'westleysoudry/academic-star-map' }}
 
 jobs:
   deploy:
@@ -24,18 +24,35 @@ jobs:
           python - <<'PY'
           import os
           from huggingface_hub import HfApi
+          from huggingface_hub.errors import RepositoryNotFoundError
 
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE_REPO"]
           api = HfApi()
-          api.create_repo(
-              repo_id=repo_id,
-              repo_type="space",
-              space_sdk="docker",
-              private=True,
-              exist_ok=True,
-              token=token,
-          )
+          try:
+              api.repo_info(repo_id=repo_id, repo_type="space", token=token)
+          except RepositoryNotFoundError:
+              print(f"Hugging Face Space {repo_id!r} was not found or is not visible to HF_TOKEN.")
+              print("Trying to create it as a private Docker Space...")
+              try:
+                  api.create_repo(
+                      repo_id=repo_id,
+                      repo_type="space",
+                      space_sdk="docker",
+                      private=True,
+                      exist_ok=True,
+                      token=token,
+                  )
+              except Exception as exc:
+                  raise SystemExit(
+                      "Could not create the Hugging Face Space. "
+                      "HF_TOKEN must come from a Hugging Face account that can create/write "
+                      f"Spaces under the namespace in {repo_id!r}. If your Hugging Face username "
+                      "is different from your GitHub username, create the Space under your actual "
+                      "Hugging Face namespace and set the GitHub Actions variable HF_SPACE_REPO "
+                      "to that value. Original error: "
+                      f"{exc}"
+                  ) from exc
           api.upload_folder(
               folder_path=".",
               repo_id=repo_id,

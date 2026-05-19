@@ -19,13 +19,15 @@ Default Space repo in `.github/workflows/deploy-space.yml`:
 westleysoudry/academic-star-map
 ```
 
-If your Hugging Face Space has a different name, edit `HF_SPACE_REPO` in that workflow.
+If your Hugging Face username or Space name is different, set the GitHub Actions repository variable `HF_SPACE_REPO` to the real Space id, for example `your-hf-username/academic-star-map`. If no variable is set, the workflow uses the default above.
 
 Required GitHub secret:
 
 ```text
 HF_TOKEN
 ```
+
+`HF_TOKEN` must be a Hugging Face token from an account that can create and write to the Space namespace in `HF_SPACE_REPO`. Your GitHub username and Hugging Face username do not have to match.
 
 Required Hugging Face Space secrets / variables:
 
