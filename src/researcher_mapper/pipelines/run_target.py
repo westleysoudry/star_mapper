@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 import threading
 from datetime import datetime
@@ -56,6 +57,7 @@ from researcher_mapper.models.schemas import (
     CandidateScore,
     CandidateSummary,
     FeatureVector,
+    InstitutionRef,
     ResearcherProfile,
 )
 from researcher_mapper.outputs.render_csv import save_csv
@@ -252,6 +254,99 @@ def _match_cv_relationship(candidate_name: str, advisor_names: set[str]) -> str 
 
 # ── Two-stage rerank ──────────────────────────────────────────────────────────
 
+_INSTITUTION_ALIAS_PATTERNS: dict[str, tuple[str, ...]] = {
+    "technion": (
+        "technion",
+        "israel institute of technology",
+    ),
+}
+
+_GENERIC_INSTITUTION_WORDS = {
+    "academy",
+    "academic",
+    "center",
+    "centre",
+    "college",
+    "department",
+    "faculty",
+    "institute",
+    "laboratory",
+    "national",
+    "research",
+    "school",
+    "science",
+    "technology",
+    "university",
+}
+
+
+def _normalise_institution_name(name: str | None) -> str:
+    text = (name or "").lower().replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\b(the|of|at|for|and)\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _external_id_tail(value: str | None) -> str:
+    return (value or "").strip().rstrip("/").split("/")[-1].lower()
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    return bool(phrase and f" {phrase} " in f" {text} ")
+
+
+def _canonical_institution_name(name: str | None) -> str:
+    normalised = _normalise_institution_name(name)
+    if not normalised:
+        return ""
+    for canonical, aliases in _INSTITUTION_ALIAS_PATTERNS.items():
+        for alias in aliases:
+            if _contains_phrase(normalised, _normalise_institution_name(alias)):
+                return canonical
+    return normalised
+
+
+def _is_specific_institution_name(name: str) -> bool:
+    words = set(name.split())
+    specific_words = words - _GENERIC_INSTITUTION_WORDS
+    return len(name) >= 8 and bool(specific_words)
+
+
+def _strong_institution_name_match(left: str, right: str) -> bool:
+    if not (_is_specific_institution_name(left) and _is_specific_institution_name(right)):
+        return False
+    if left == right:
+        return True
+    shorter, longer = sorted((left, right), key=len)
+    return (
+        len(shorter) >= 12
+        and len(shorter.split()) >= 2
+        and _contains_phrase(longer, shorter)
+    )
+
+
+def _same_institution_ref(
+    target_institution: InstitutionRef | None,
+    candidate_institution: InstitutionRef | None,
+) -> bool:
+    if not target_institution or not candidate_institution:
+        return False
+
+    target_openalex = _external_id_tail(target_institution.openalex_id)
+    candidate_openalex = _external_id_tail(candidate_institution.openalex_id)
+    if target_openalex and candidate_openalex and target_openalex == candidate_openalex:
+        return True
+
+    target_ror = _external_id_tail(target_institution.ror)
+    candidate_ror = _external_id_tail(candidate_institution.ror)
+    if target_ror and candidate_ror and target_ror == candidate_ror:
+        return True
+
+    target_name = _canonical_institution_name(target_institution.name)
+    candidate_name = _canonical_institution_name(candidate_institution.name)
+    return _strong_institution_name_match(target_name, candidate_name)
+
+
 def _rerank_with_full_profiles(
     scores: list[CandidateScore],
     summaries_by_id: dict,
@@ -259,7 +354,7 @@ def _rerank_with_full_profiles(
     citing_author_ids: set[str],
     target_recent_coauthors: set[str],
     target_department: str,
-    target_institution_id: str,
+    target_institution: InstitutionRef | None,
     weights: dict,
     from_year: int,
     rerank_top_n: int = 60,
@@ -344,9 +439,17 @@ def _rerank_with_full_profiles(
             familiarity = min(familiarity + 0.3, 1.0)
 
         venue_sim = _weighted_jaccard_quick(target_fv.venue_vector, cand_fv.venue_vector)
+        same_institution = score.same_institution or _same_institution_ref(
+            target_institution,
+            profile.current_institution,
+        )
 
         # Re-derive same_department with updated same_area (dept flags unchanged)
-        cand_dept = score.department or ""
+        cand_dept = (
+            profile.current_institution.department
+            if profile.current_institution and profile.current_institution.department
+            else score.department or ""
+        )
         same_department = bool(
             target_department and cand_dept and _dept_match(target_department, cand_dept)
         )
@@ -358,7 +461,7 @@ def _rerank_with_full_profiles(
         recent_coauthor = score.recent_coauthor
         no_conflict = 0.0 if recent_coauthor else 1.0
         institution_distance_bonus = (
-            0.3 if (not score.same_institution and same_area >= 0.40) else 0.0
+            0.3 if (not same_institution and same_area >= 0.40) else 0.0
         )
         recency_overlap = 1.0 if recent_coauthor else same_area * 0.5
 
@@ -391,6 +494,7 @@ def _rerank_with_full_profiles(
         score.complementary_topic_score = comp_topic
         score.familiarity_proxy = familiarity
         score.same_department = same_department
+        score.same_institution = same_institution
         score.dept_explicitly_different = dept_explicitly_different
         score.bucket_scores = BucketScores(**bucket_score_dict)
 
@@ -633,7 +737,7 @@ def run_target(
     log.info(
         "Target institution: %s (id=%s)",
         target_profile.current_institution.name if target_profile.current_institution else "unknown",
-        target_institution_id or "MISSING — dept_mentors will be empty",
+        target_institution_id or "missing; using ROR/name fallback",
     )
     target_department = target_profile.current_department or ""
     target_recent_coauthors = get_recent_coauthor_ids(
@@ -704,15 +808,9 @@ def run_target(
 
         # Venue and institution proximity proxies
         venue_sim = _weighted_jaccard_quick(target_fv.venue_vector, cand_fv.venue_vector)
-        cand_inst_id = (
-            summary.current_institution.openalex_id or ""
-            if summary.current_institution
-            else ""
-        )
-        same_institution = bool(
-            target_institution_id
-            and cand_inst_id
-            and target_institution_id.split("/")[-1] == cand_inst_id.split("/")[-1]
+        same_institution = _same_institution_ref(
+            target_profile.current_institution,
+            summary.current_institution,
         )
         institution_distance_bonus = 0.3 if (not same_institution and same_area >= 0.40) else 0.0
 
@@ -803,7 +901,7 @@ def run_target(
             citing_author_ids=citing_author_ids,
             target_recent_coauthors=target_recent_coauthors,
             target_department=target_department,
-            target_institution_id=target_institution_id,
+            target_institution=target_profile.current_institution,
             weights=weights,
             from_year=from_year,
             rerank_top_n=rerank_top_n,

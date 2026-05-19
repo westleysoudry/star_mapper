@@ -100,6 +100,32 @@ def test_assign_guarantees_same_institution_mentor_when_available():
     assert result[0].assigned_bucket == "dept_mentors"
 
 
+def test_same_institution_ref_matches_technion_subunit_names():
+    from researcher_mapper.pipelines.run_target import _same_institution_ref
+
+    target = InstitutionRef(
+        openalex_id="https://openalex.org/I123",
+        name="Technion - Israel Institute of Technology",
+        country_code="IL",
+    )
+    candidate = InstitutionRef(
+        openalex_id="https://openalex.org/I999",
+        name="Technion Faculty of Electrical and Computer Engineering",
+        country_code="IL",
+    )
+
+    assert _same_institution_ref(target, candidate)
+
+
+def test_same_institution_ref_rejects_unrelated_israeli_universities():
+    from researcher_mapper.pipelines.run_target import _same_institution_ref
+
+    target = InstitutionRef(name="Technion - Israel Institute of Technology")
+    candidate = InstitutionRef(name="Tel Aviv University")
+
+    assert not _same_institution_ref(target, candidate)
+
+
 def test_interdisciplinary_fit_is_not_consumed_by_in_area_first():
     interdisciplinary = _make(
         "interdisciplinary",
