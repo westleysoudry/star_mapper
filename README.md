@@ -58,6 +58,8 @@ ADMIN_COPY_EMAIL=westleysoudry@gmail.com
 Optional:
 
 ```text
+TEST_ACCESS_CODE=<shared private beta code>
+TEST_ALLOWED_EMAILS=person1@example.com,person2@example.com
 SEMANTIC_SCHOLAR_API_KEY=<Semantic Scholar API key>
 EMAIL_BACKEND=brevo
 SMTP_HOST=smtp.gmail.com
@@ -70,6 +72,8 @@ MAX_CV_BYTES=20971520
 ```
 
 Email delivery uses an HTTPS email API by default because some hosting platforms block outbound SMTP ports. Add `RESEND_API_KEY` or `BREVO_API_KEY`; SMTP is only used when `EMAIL_BACKEND=smtp`. For Brevo, `MAIL_FROM` should be a sender address verified in Brevo. If `MAIL_FROM` is not set, the app falls back to `ADMIN_COPY_EMAIL`.
+
+For a private testing phase, set `TEST_ACCESS_CODE` to require a shared code before submission or status/download checks. Set `TEST_ALLOWED_EMAILS` to a comma-separated allowlist. If both are set, both checks must pass.
 
 ## Privacy Defaults
 

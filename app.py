@@ -46,6 +46,12 @@ ADMIN_COPY_ENABLED = os.getenv("ADMIN_COPY_ENABLED", "true").strip().lower() in 
 }
 ADMIN_COPY_EMAIL = os.getenv("ADMIN_COPY_EMAIL", "westleysoudry@gmail.com").strip()
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "brevo").strip().lower()
+TEST_ACCESS_CODE = (os.getenv("TEST_ACCESS_CODE") or os.getenv("ACCESS_CODE") or "").strip()
+TEST_ALLOWED_EMAILS = {
+    email.strip().lower()
+    for email in re.split(r"[,;\s]+", os.getenv("TEST_ALLOWED_EMAILS", ""))
+    if email.strip()
+}
 
 DATA_ROOT.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -448,6 +454,14 @@ def _send_email(
     )
 
 
+def _testing_access_error(email: str = "", access_code: str = "") -> str | None:
+    if TEST_ACCESS_CODE and (access_code or "").strip() != TEST_ACCESS_CODE:
+        return "This test site is private for now. Please enter the testing access code."
+    if TEST_ALLOWED_EMAILS and (email or "").strip().lower() not in TEST_ALLOWED_EMAILS:
+        return "This test site is private for now. This email is not on the testing list."
+    return None
+
+
 def _send_ready_email(to_addr: str, job_id: str) -> str | None:
     template_path = Path("content/emails/result_ready.md")
     body = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
@@ -658,10 +672,14 @@ def start_job(
     submitter_email: str,
     faculty_page: str,
     cv_file: str,
+    access_code: str = "",
 ) -> tuple[str, str, Any, Any]:
     _cleanup_expired_jobs()
     name = (name or "").strip()
     submitter_email = (submitter_email or "").strip()
+    access_error = _testing_access_error(submitter_email, access_code)
+    if access_error:
+        return access_error, "", gr.update(value=None), gr.update(value=None)
     if not name:
         return "Please enter the researcher's full name.", "", gr.update(value=None), gr.update(value=None)
     if not submitter_email:
@@ -768,7 +786,14 @@ def _download_button_updates(job_id: str) -> tuple[Any, Any]:
     )
 
 
-def check_status_and_downloads(job_id: str) -> tuple[str, Any, Any]:
+def check_status_and_downloads(
+    job_id: str,
+    submitter_email: str = "",
+    access_code: str = "",
+) -> tuple[str, Any, Any]:
+    access_error = _testing_access_error(submitter_email, access_code)
+    if access_error:
+        return access_error, gr.update(value=None), gr.update(value=None)
     status_text = check_status(job_id)
     starmap_update, excel_update = _download_button_updates(job_id)
     return status_text, starmap_update, excel_update
@@ -1175,6 +1200,11 @@ def _build_app() -> gr.Blocks:
                     institution = gr.Textbox(label="Institution hint (optional)")
                     orcid = gr.Textbox(label="ORCID (optional)")
                     submitter_email = gr.Textbox(label="Email for notification")
+                    access_code = gr.Textbox(
+                        label="Testing access code",
+                        type="password",
+                        visible=bool(TEST_ACCESS_CODE),
+                    )
                     faculty_page = gr.Textbox(label="Faculty page URL (optional)")
                     cv_file = gr.File(
                         label="CV file (PDF or TXT, max 20 MB)",
@@ -1208,12 +1238,13 @@ def _build_app() -> gr.Blocks:
                     submitter_email,
                     faculty_page,
                     cv_file,
+                    access_code,
                 ],
                 outputs=[status, job_id, download_starmap_btn, download_excel_btn],
             )
             check.click(
                 check_status_and_downloads,
-                inputs=[job_id],
+                inputs=[job_id, submitter_email, access_code],
                 outputs=[status, download_starmap_btn, download_excel_btn],
             )
 
