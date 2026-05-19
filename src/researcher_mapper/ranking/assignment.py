@@ -601,8 +601,9 @@ def assign_israel_and_world(
     israel_list = assign_final_list(
         israel_candidates, bucket_caps, israel_policy, target_size=target_size
     )
+    world_bucket_caps = dict(bucket_caps, dept_mentors=0)
     world_list = assign_final_list(
-        world_candidates, bucket_caps, policy, target_size=target_size
+        world_candidates, world_bucket_caps, policy, target_size=target_size
     )
 
     return israel_list, world_list

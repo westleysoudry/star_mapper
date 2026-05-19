@@ -157,6 +157,47 @@ def test_israel_list_forces_best_available_institutional_mentor_when_no_signal()
     assert not any(c.assigned_bucket == "dept_mentors" for c in world_list)
 
 
+def test_world_list_never_assigns_institutional_mentors():
+    candidates = [
+        _make(
+            "israeli_senior",
+            israel_affiliated=True,
+            same_area_score=0.45,
+            seniority_score=0.90,
+            bucket_scores=BucketScores(dept_mentors=0.95),
+        ),
+        _make(
+            "world_same_inst",
+            country_code="US",
+            same_institution=True,
+            same_department=True,
+            same_area_score=0.85,
+            seniority_score=0.95,
+            bucket_scores=BucketScores(dept_mentors=0.99, in_area_collaborators=0.90),
+        ),
+        _make(
+            "world_peer",
+            country_code="US",
+            same_area_score=0.80,
+            seniority_score=0.80,
+            bucket_scores=BucketScores(dept_mentors=0.80, in_area_collaborators=0.85),
+        ),
+    ]
+    policy = dict(
+        _POLICY,
+        target_list_size=2,
+        dept_mentor_requires_same_department=False,
+        dept_mentor_requires_same_institution=True,
+        min_same_area_for_dept_mentor=0.30,
+    )
+
+    israel_list, world_list = assign_israel_and_world(candidates, _CAPS, policy)
+
+    assert any(c.assigned_bucket == "dept_mentors" for c in israel_list)
+    assert not any(c.assigned_bucket == "dept_mentors" for c in world_list)
+    assert "world_same_inst" in {c.candidate_id for c in world_list}
+
+
 def test_same_institution_ref_matches_technion_subunit_names():
     from researcher_mapper.pipelines.run_target import _same_institution_ref
 
