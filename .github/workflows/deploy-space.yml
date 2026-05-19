@@ -29,6 +29,12 @@ jobs:
           token = os.environ["HF_TOKEN"]
           repo_id = os.environ["HF_SPACE_REPO"]
           api = HfApi()
+          whoami = api.whoami(token=token)
+          orgs = ", ".join(org.get("name", "") for org in whoami.get("orgs", []) if org.get("name"))
+          print(f"HF_TOKEN account: {whoami.get('name', '<unknown>')}")
+          if orgs:
+              print(f"HF_TOKEN orgs: {orgs}")
+          print(f"Target Space: {repo_id}")
           try:
               api.repo_info(repo_id=repo_id, repo_type="space", token=token)
           except RepositoryNotFoundError:
