@@ -1017,18 +1017,37 @@ def _build_app() -> gr.Blocks:
         background: rgba(18, 28, 42, 0.94) !important;
     }
     .asm-panel label,
-    .asm-panel span,
-    .asm-panel .wrap,
     .asm-panel .prose,
     .asm-panel p {
         color: #e5eefc !important;
     }
+    .asm-panel label,
+    .asm-panel label span {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        color: #c9d6e8 !important;
+        padding-left: 0 !important;
+    }
+    .asm-panel .wrap {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
     .asm-panel input,
     .asm-panel textarea,
-    .asm-panel .file-preview {
-        background: rgba(8, 10, 20, 0.86) !important;
+    .asm-panel .file-preview,
+    .asm-panel .block,
+    .asm-panel .form {
+        background: rgba(4, 31, 39, 0.72) !important;
         color: #f8fafc !important;
-        border-color: rgba(140, 217, 255, 0.22) !important;
+        border-color: rgba(105, 186, 205, 0.16) !important;
+        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.36) !important;
+    }
+    .asm-panel input:focus,
+    .asm-panel textarea:focus {
+        border-color: rgba(180, 235, 245, 0.26) !important;
+        box-shadow: inset 0 0 18px rgba(6, 38, 48, 0.36), 0 0 0 1px rgba(180, 235, 245, 0.10) !important;
     }
     .asm-panel input::placeholder,
     .asm-panel textarea::placeholder {
