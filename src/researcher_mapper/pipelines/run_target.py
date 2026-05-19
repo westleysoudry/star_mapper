@@ -206,7 +206,7 @@ def _generate_reasons(
             f"(same-area {score.same_area_score:.2f}, "
             f"complementary {score.complementary_topic_score:.2f})"
         )
-    if score.complementary_topic_score >= 0.55:
+    if bucket == "interdisciplinary_collaborators" and score.complementary_topic_score >= 0.55:
         reasons.append("Complementary research area — good interdisciplinary fit")
     return reasons or ["Selected by base similarity"]
 

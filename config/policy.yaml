@@ -31,9 +31,9 @@ policy:
   #
   # Threshold structure (same_area ranges):
   #   < 0.07            : excluded from all output
-  #   [0.07, 0.18)      : interdisciplinary collaborators only
-  #   [0.18, 0.45)      : in_area only with citation/coauthor familiarity bridge
-  #   >= 0.45           : in_area collaborators, letter writers, area/dept mentors
+  #   [0.07, 0.18)      : interdisciplinary candidates if complementary
+  #   [0.18, 0.45)      : interdisciplinary if complementary, otherwise in-area with a bridge
+  #   >= 0.45           : in-area collaborators, letter writers, area/dept mentors
   min_same_area_for_in_area_collaborator: 0.18   # borderline-area researchers below this redirect to interdisciplinary_collaborators
   min_same_area_for_supplemental_in_area: 0.25
   min_seniority_for_supplemental_in_area: 0.45
@@ -55,8 +55,8 @@ policy:
   min_same_area_for_letter_writer: 0.30          # raised to align with dept_mentor; excludes borderline-in-area researchers from letter-writer roles
   min_same_area_for_area_mentor: 0.30            # aligned with letter_writer: mentors must have at least moderate topic overlap
   min_same_area_for_interdisciplinary_min: 0.07  # below this threshold excluded from all output
-  min_same_area_for_interdisciplinary_max: 0.18  # aligned with in_area/area_mentor min (no dead zone between buckets)
-  min_complementary_topic_for_interdisciplinary: 0.15
+  min_same_area_for_interdisciplinary_max: 0.45  # complementary-but-not-core-area candidates
+  min_complementary_topic_for_interdisciplinary: 0.45
   min_same_area_for_dept_mentor: 0.30           # same-institution researchers must share the research area, not just the building
   min_seniority_for_mentors: 0.65              # mentors must be established researchers
   min_seniority_for_letter_writers: 0.65        # ensures letter writers are senior enough to carry weight

@@ -23,8 +23,8 @@ BUCKET_PRIORITY = [
     "dept_mentors",
     "area_mentors",
     "recommendation_letter_writers",
-    "in_area_collaborators",
     "interdisciplinary_collaborators",
+    "in_area_collaborators",
 ]
 
 

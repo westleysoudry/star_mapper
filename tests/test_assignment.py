@@ -100,6 +100,67 @@ def test_assign_guarantees_same_institution_mentor_when_available():
     assert result[0].assigned_bucket == "dept_mentors"
 
 
+def test_interdisciplinary_fit_is_not_consumed_by_in_area_first():
+    interdisciplinary = _make(
+        "interdisciplinary",
+        same_area_score=0.35,
+        complementary_topic_score=0.70,
+        seniority_score=0.75,
+        familiarity_proxy=0.40,
+        bucket_scores=BucketScores(
+            in_area_collaborators=0.95,
+            interdisciplinary_collaborators=0.90,
+        ),
+    )
+    candidates = [
+        interdisciplinary,
+        _make("in_area", same_area_score=0.70, seniority_score=0.75),
+    ]
+    policy = dict(
+        _POLICY,
+        target_list_size=2,
+        min_same_area_for_in_area_collaborator=0.18,
+        min_same_area_for_unbridged_in_area_collaborator=0.45,
+        min_familiarity_for_borderline_in_area=0.30,
+        min_same_area_for_interdisciplinary_min=0.20,
+        min_same_area_for_interdisciplinary_max=0.45,
+        min_complementary_topic_for_interdisciplinary=0.55,
+    )
+    caps = {
+        "dept_mentors": 0,
+        "area_mentors": 0,
+        "recommendation_letter_writers": 0,
+        "interdisciplinary_collaborators": 1,
+        "in_area_collaborators": 2,
+    }
+
+    result = assign_final_list(candidates, caps, policy, target_size=2)
+
+    assigned = {c.candidate_id: c.assigned_bucket for c in result}
+    assert assigned["interdisciplinary"] == "interdisciplinary_collaborators"
+    assert assigned["in_area"] == "in_area_collaborators"
+
+
+def test_interdisciplinary_caption_matches_assigned_bucket():
+    from researcher_mapper.pipelines.run_target import _generate_reasons
+
+    candidate = _make(
+        "candidate",
+        same_area_score=0.35,
+        complementary_topic_score=0.70,
+    )
+
+    in_area_reasons = _generate_reasons(candidate, "Candidate", "in_area_collaborators")
+    interdisciplinary_reasons = _generate_reasons(
+        candidate,
+        "Candidate",
+        "interdisciplinary_collaborators",
+    )
+
+    assert not any("good interdisciplinary fit" in r for r in in_area_reasons)
+    assert any("good interdisciplinary fit" in r for r in interdisciplinary_reasons)
+
+
 def test_rebalanced_caps_make_in_area_main_bucket():
     candidates = [
         _make(f"mentor{i}", same_area_score=0.70, seniority_score=0.80)

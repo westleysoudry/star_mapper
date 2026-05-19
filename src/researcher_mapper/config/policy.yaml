@@ -35,8 +35,8 @@ policy:
   min_same_area_for_letter_writer: 0.30
   min_same_area_for_area_mentor: 0.30
   min_same_area_for_interdisciplinary_min: 0.07
-  min_same_area_for_interdisciplinary_max: 0.18
-  min_complementary_topic_for_interdisciplinary: 0.15
+  min_same_area_for_interdisciplinary_max: 0.45
+  min_complementary_topic_for_interdisciplinary: 0.45
   min_same_area_for_dept_mentor: 0.30
   min_seniority_for_mentors: 0.65
   min_seniority_for_letter_writers: 0.65
