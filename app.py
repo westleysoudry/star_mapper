@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -35,8 +37,14 @@ RESULT_DELETE_IF_UNDOWNLOADED_DAYS = int(os.getenv("RESULT_DELETE_IF_UNDOWNLOADE
 
 HF_RESULTS_REPO = os.getenv("HF_RESULTS_REPO", "")
 HF_DATA_TOKEN = os.getenv("HF_DATA_TOKEN") or os.getenv("HF_TOKEN")
-ADMIN_CALIBRATION_TOKEN = os.getenv("ADMIN_CALIBRATION_TOKEN", "")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
+ADMIN_COPY_ENABLED = os.getenv("ADMIN_COPY_ENABLED", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+ADMIN_COPY_EMAIL = os.getenv("ADMIN_COPY_EMAIL", "westleysoudry@gmail.com").strip()
 
 DATA_ROOT.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +77,6 @@ def _load_content() -> dict[str, str]:
         "tagline": "",
         "intro_md": "",
         "privacy_note_md": "",
-        "admin_note_md": "",
         "email_subject": "Your Academic Star Map is ready",
         "email_footer": "Academic Star Map",
     }
@@ -239,7 +246,27 @@ def _make_download_url(job_id: str) -> str:
     return f"{base.rstrip('/')}/?job={job_id}"
 
 
-def _send_brevo_email(to_addr: str, body: str) -> str | None:
+def _attachment_payloads(paths: list[Path]) -> list[dict[str, str]]:
+    payloads: list[dict[str, str]] = []
+    for path in paths:
+        if not path.exists() or not path.is_file():
+            continue
+        payloads.append(
+            {
+                "name": path.name,
+                "content": base64.b64encode(path.read_bytes()).decode("ascii"),
+            }
+        )
+    return payloads
+
+
+def _send_brevo_email(
+    to_addr: str,
+    *,
+    subject: str,
+    body: str,
+    attachments: list[Path] | None = None,
+) -> str | None:
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
         return "Brevo API is not configured."
@@ -253,9 +280,12 @@ def _send_brevo_email(to_addr: str, body: str) -> str | None:
             "name": os.getenv("MAIL_FROM_NAME") or CONTENT["brand"],
         },
         "to": [{"email": to_addr}],
-        "subject": CONTENT["email_subject"],
+        "subject": subject,
         "textContent": body,
     }
+    attachment_payloads = _attachment_payloads(attachments or [])
+    if attachment_payloads:
+        payload["attachment"] = attachment_payloads
     try:
         response = httpx.post(
             "https://api.brevo.com/v3/smtp/email",
@@ -273,21 +303,13 @@ def _send_brevo_email(to_addr: str, body: str) -> str | None:
         return f"Could not send email with Brevo API: {exc}"
 
 
-def _send_ready_email(to_addr: str, job_id: str) -> str | None:
-    if not to_addr:
-        return "No submitter email was provided."
-
-    template_path = Path("content/emails/result_ready.md")
-    body = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
-    body = body.format(
-        brand=CONTENT["brand"],
-        job_id=job_id,
-        download_url=_make_download_url(job_id),
-    )
-
-    if os.getenv("BREVO_API_KEY"):
-        return _send_brevo_email(to_addr, body)
-
+def _send_smtp_email(
+    to_addr: str,
+    *,
+    subject: str,
+    body: str,
+    attachments: list[Path] | None = None,
+) -> str | None:
     host = os.getenv("SMTP_HOST")
     username = os.getenv("SMTP_USERNAME")
     password = os.getenv("SMTP_PASSWORD")
@@ -296,10 +318,21 @@ def _send_ready_email(to_addr: str, job_id: str) -> str | None:
         return "Email is not configured; no email was sent."
 
     msg = EmailMessage()
-    msg["Subject"] = CONTENT["email_subject"]
+    msg["Subject"] = subject
     msg["From"] = mail_from
     msg["To"] = to_addr
     msg.set_content(body)
+    for path in attachments or []:
+        if not path.exists() or not path.is_file():
+            continue
+        content_type, _ = mimetypes.guess_type(path.name)
+        maintype, subtype = (content_type or "application/octet-stream").split("/", 1)
+        msg.add_attachment(
+            path.read_bytes(),
+            maintype=maintype,
+            subtype=subtype,
+            filename=path.name,
+        )
 
     try:
         port = int(os.getenv("SMTP_PORT", "587"))
@@ -310,6 +343,68 @@ def _send_ready_email(to_addr: str, job_id: str) -> str | None:
         return None
     except Exception as exc:
         return f"Could not send email: {exc}"
+
+
+def _send_email(
+    to_addr: str,
+    *,
+    subject: str,
+    body: str,
+    attachments: list[Path] | None = None,
+) -> str | None:
+    if not to_addr:
+        return "No submitter email was provided."
+    if os.getenv("BREVO_API_KEY"):
+        return _send_brevo_email(
+            to_addr,
+            subject=subject,
+            body=body,
+            attachments=attachments,
+        )
+    return _send_smtp_email(
+        to_addr,
+        subject=subject,
+        body=body,
+        attachments=attachments,
+    )
+
+
+def _send_ready_email(to_addr: str, job_id: str) -> str | None:
+    template_path = Path("content/emails/result_ready.md")
+    body = template_path.read_text(encoding="utf-8") if template_path.exists() else ""
+    body = body.format(
+        brand=CONTENT["brand"],
+        job_id=job_id,
+        download_url=_make_download_url(job_id),
+    )
+    return _send_email(to_addr, subject=CONTENT["email_subject"], body=body)
+
+
+def _send_admin_copy_email(
+    *,
+    job_id: str,
+    name: str,
+    submitter_email: str,
+    cv_path: Path,
+    starmap_path: Path,
+    excel_path: Path,
+) -> str | None:
+    if not ADMIN_COPY_ENABLED or not ADMIN_COPY_EMAIL:
+        return None
+    body = (
+        "Academic Star Map admin copy\n\n"
+        f"Job ID: {job_id}\n"
+        f"Researcher: {name}\n"
+        f"Submitter email: {submitter_email or 'not provided'}\n"
+        f"Download page: {_make_download_url(job_id)}\n\n"
+        "Attached files: submitted CV, starmap HTML, and combined Excel workbook.\n"
+    )
+    return _send_email(
+        ADMIN_COPY_EMAIL,
+        subject=f"Academic Star Map admin copy: {name}",
+        body=body,
+        attachments=[cv_path, starmap_path, excel_path],
+    )
 
 
 def _first_existing(paths: list[Path]) -> Path | None:
@@ -397,20 +492,21 @@ def _run_job(
     email: str,
     faculty_page: str,
     cv_path: Path,
-    retain_cv: bool,
 ) -> None:
     try:
         _update_job(job_id, status="running", message="Parsing CV", started_at=_iso())
         cv_data = parse_cv(cv_path)
 
-        if retain_cv:
-            retained_path = _upload_file(cv_path, f"calibration/{job_id}/{cv_path.name}")
-            _update_job(job_id, calibration_cv_path=retained_path)
+        admin_cv_path = None
+        if ADMIN_COPY_ENABLED:
+            admin_cv_path = _upload_file(cv_path, f"admin_copies/{job_id}/cv/{cv_path.name}")
+            _update_job(job_id, admin_cv_path=admin_cv_path, admin_copy=True)
 
-        try:
-            cv_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if not ADMIN_COPY_ENABLED:
+            try:
+                cv_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         _update_job(job_id, message="Mapping researchers")
         pipeline_dir = _job_dir(job_id) / "pipeline"
@@ -443,6 +539,18 @@ def _run_job(
         excel_artifact = _upload_file(excel_path, f"results/{job_id}/{excel_path.name}")
 
         warning = _send_ready_email(email, job_id)
+        admin_warning = _send_admin_copy_email(
+            job_id=job_id,
+            name=name,
+            submitter_email=email,
+            cv_path=cv_path,
+            starmap_path=starmap_path,
+            excel_path=excel_path,
+        )
+        try:
+            cv_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         _update_job(
             job_id,
             status="completed",
@@ -452,7 +560,9 @@ def _run_job(
             excel_path=str(excel_path),
             starmap_repo_path=starmap_artifact,
             excel_repo_path=excel_artifact,
+            admin_cv_path=admin_cv_path,
             email_warning=warning,
+            admin_email_warning=admin_warning,
         )
     except Exception as exc:
         try:
@@ -469,8 +579,6 @@ def start_job(
     submitter_email: str,
     faculty_page: str,
     cv_file: str,
-    retain_for_calibration: bool,
-    admin_token: str,
 ) -> tuple[str, str]:
     _cleanup_expired_jobs()
     name = (name or "").strip()
@@ -490,14 +598,6 @@ def start_job(
     if src.suffix.lower() not in {".pdf", ".txt"}:
         return "Please upload a PDF or plain-text CV.", ""
 
-    retain_allowed = bool(
-        retain_for_calibration
-        and ADMIN_CALIBRATION_TOKEN
-        and admin_token == ADMIN_CALIBRATION_TOKEN
-    )
-    if retain_for_calibration and not retain_allowed:
-        return "Calibration retention requires the admin token.", ""
-
     job_id = uuid.uuid4().hex[:12]
     input_dir = _job_dir(job_id) / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -511,7 +611,7 @@ def start_job(
         submitted_at=_iso(),
         name=name,
         email=submitter_email,
-        retain_cv=retain_allowed,
+        admin_copy=ADMIN_COPY_ENABLED,
     )
     _executor.submit(
         _run_job,
@@ -522,7 +622,6 @@ def start_job(
         email=submitter_email,
         faculty_page=(faculty_page or "").strip(),
         cv_path=cv_path,
-        retain_cv=retain_allowed,
     )
     return (
         f"Job `{job_id}` is queued. You can close the page; a notification email will be sent if email delivery is configured.",
@@ -605,11 +704,18 @@ def download_excel(job_id: str) -> tuple[str | None, str]:
 def _build_app() -> gr.Blocks:
     css = """
     body {
-        background: #f5f7f3;
+        background-color: #080a14;
+        background-image:
+            radial-gradient(circle, rgba(255,255,255,0.70) 0 1px, transparent 1.6px),
+            radial-gradient(circle, rgba(140,217,255,0.42) 0 1px, transparent 1.5px),
+            radial-gradient(circle, rgba(255,255,255,0.24) 0 1px, transparent 1.4px);
+        background-size: 150px 150px, 230px 230px, 360px 360px;
+        background-position: 20px 34px, 90px 120px, 40px 80px;
     }
     .gradio-container {
         max-width: none !important;
         background: transparent !important;
+        color: #f5f7fb;
     }
     .asm-shell {
         max-width: 1180px;
@@ -617,18 +723,19 @@ def _build_app() -> gr.Blocks:
         padding: 22px 18px 30px;
     }
     .asm-hero {
-        background: #111827;
+        background: rgba(8, 10, 20, 0.88);
         color: #f8fafc;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(140, 217, 255, 0.24);
         border-radius: 8px;
         padding: 24px 26px;
-        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
     }
     .asm-hero h1 {
         margin: 0 0 8px;
         font-size: 34px;
         line-height: 1.06;
         letter-spacing: 0;
+        color: #ffffff;
     }
     .asm-hero p {
         margin: 0;
@@ -639,7 +746,7 @@ def _build_app() -> gr.Blocks:
     }
     .asm-intro {
         margin: 18px 0;
-        color: #334155;
+        color: #c9d6e8;
         line-height: 1.55;
     }
     .asm-grid {
@@ -647,25 +754,26 @@ def _build_app() -> gr.Blocks:
         align-items: stretch;
     }
     .asm-panel {
-        background: rgba(255, 255, 255, 0.92);
-        border: 1px solid #d9e2dc;
+        background: rgba(15, 22, 38, 0.92);
+        border: 1px solid rgba(140, 217, 255, 0.22);
         border-radius: 8px;
         padding: 18px;
-        box-shadow: 0 10px 32px rgba(31, 41, 55, 0.08);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.34);
     }
     .asm-panel h2 {
         margin: 0 0 12px;
         font-size: 18px;
         line-height: 1.25;
-        color: #172033;
+        color: #8cd9ff;
         letter-spacing: 0;
     }
     .asm-status {
         min-height: 150px;
         padding: 14px;
-        background: #f8fafc;
-        border: 1px solid #dce4ee;
+        background: rgba(8, 10, 20, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 8px;
+        color: #eff6ff;
     }
     .asm-status p {
         margin-bottom: 8px;
@@ -677,9 +785,27 @@ def _build_app() -> gr.Blocks:
         min-height: 44px;
         font-weight: 650;
     }
+    .asm-panel label,
+    .asm-panel span,
+    .asm-panel .wrap,
+    .asm-panel .prose,
+    .asm-panel p {
+        color: #e5eefc !important;
+    }
+    .asm-panel input,
+    .asm-panel textarea,
+    .asm-panel .file-preview {
+        background: rgba(8, 10, 20, 0.86) !important;
+        color: #f8fafc !important;
+        border-color: rgba(140, 217, 255, 0.22) !important;
+    }
+    .asm-panel input::placeholder,
+    .asm-panel textarea::placeholder {
+        color: transparent !important;
+    }
     .asm-footer {
         margin-top: 18px;
-        color: #475569;
+        color: #aab8cf;
         font-size: 14px;
         line-height: 1.5;
     }
@@ -699,8 +825,8 @@ def _build_app() -> gr.Blocks:
     }
     """
     theme = gr.themes.Soft(
-        primary_hue="teal",
-        secondary_hue="amber",
+        primary_hue="cyan",
+        secondary_hue="yellow",
         neutral_hue="slate",
         radius_size="sm",
     )
@@ -721,20 +847,16 @@ def _build_app() -> gr.Blocks:
             with gr.Row(elem_classes=["asm-grid"]):
                 with gr.Column(scale=1, elem_classes=["asm-panel"]):
                     gr.HTML("<h2>Submit CV</h2>")
-                    name = gr.Textbox(label="Researcher full name", placeholder="Daniel Soudry")
-                    institution = gr.Textbox(label="Institution hint", placeholder="Technion")
-                    orcid = gr.Textbox(label="ORCID", placeholder="0000-0000-0000-0000")
+                    name = gr.Textbox(label="Researcher full name")
+                    institution = gr.Textbox(label="Institution hint (optional)")
+                    orcid = gr.Textbox(label="ORCID (optional)")
                     submitter_email = gr.Textbox(label="Email for notification")
-                    faculty_page = gr.Textbox(label="Faculty page URL")
+                    faculty_page = gr.Textbox(label="Faculty page URL (optional)")
                     cv_file = gr.File(
                         label="CV file (PDF or TXT, max 20 MB)",
                         file_types=[".pdf", ".txt"],
                         type="filepath",
                     )
-                    with gr.Accordion("Admin calibration", open=False):
-                        gr.Markdown(CONTENT["admin_note_md"])
-                        retain_for_calibration = gr.Checkbox(label="Retain this CV for calibration")
-                        admin_token = gr.Textbox(label="Admin token", type="password")
                     submit = gr.Button("Create star map", variant="primary")
                 with gr.Column(scale=1, elem_classes=["asm-panel"]):
                     gr.HTML("<h2>Results</h2>")
@@ -756,8 +878,6 @@ def _build_app() -> gr.Blocks:
                     submitter_email,
                     faculty_page,
                     cv_file,
-                    retain_for_calibration,
-                    admin_token,
                 ],
                 outputs=[status, job_id],
             )

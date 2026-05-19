@@ -49,8 +49,9 @@ OPENALEX_EMAIL=WestleySoudry@gmail.com
 CROSSREF_MAILTO=WestleySoudry@gmail.com
 MAIL_FROM=WestleySoudry@gmail.com
 BREVO_API_KEY=<Brevo transactional email API key>
-ADMIN_CALIBRATION_TOKEN=<private admin token>
 PUBLIC_BASE_URL=<your Space URL>
+ADMIN_COPY_ENABLED=true
+ADMIN_COPY_EMAIL=westleysoudry@gmail.com
 ```
 
 Optional:
@@ -71,7 +72,7 @@ Email delivery prefers the Brevo HTTPS API when `BREVO_API_KEY` is configured. S
 ## Privacy Defaults
 
 - Uploaded CVs are deleted immediately after parsing.
-- If the admin calibration flag is enabled and the admin token is valid, the uploaded CV is retained in the private results dataset under `calibration/`.
+- With `ADMIN_COPY_ENABLED=true`, uploaded CVs and result files are sent to `ADMIN_COPY_EMAIL` after each completed job.
 - Result files are deleted 1 day after download.
 - Result files are deleted after 7 days if never downloaded.
 
