@@ -45,6 +45,7 @@ ADMIN_COPY_ENABLED = os.getenv("ADMIN_COPY_ENABLED", "true").strip().lower() in 
     "on",
 }
 ADMIN_COPY_EMAIL = os.getenv("ADMIN_COPY_EMAIL", "westleysoudry@gmail.com").strip()
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "brevo").strip().lower()
 
 DATA_ROOT.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -361,6 +362,8 @@ def _send_email(
             body=body,
             attachments=attachments,
         )
+    if EMAIL_BACKEND != "smtp":
+        return "Email API is not configured; add BREVO_API_KEY to the Space secrets."
     return _send_smtp_email(
         to_addr,
         subject=subject,
@@ -653,52 +656,56 @@ def _mark_downloaded(job_id: str, record: dict[str, Any]) -> None:
         _update_job(job_id, downloaded_at=_iso())
 
 
-def _download_named_result(
+def _prepare_named_result(
     job_id: str,
     *,
     local_key: str,
     repo_key: str,
     target_path: Path,
     label: str,
-) -> tuple[str | None, str]:
+) -> Path:
     _cleanup_expired_jobs()
     record = _get_job(job_id)
     if not record:
-        return None, "No job found for that ID."
+        raise gr.Error("No job found for that ID.")
     if record.get("status") != "completed":
-        return None, f"Job is not ready yet. Current status: {record.get('status')}"
+        raise gr.Error(f"Job is not ready yet. Current status: {record.get('status')}")
 
     local_path = Path(record.get(local_key) or target_path)
+    if local_path.suffix.lower() != target_path.suffix.lower():
+        local_path = target_path
     if not local_path.exists():
         local_path = (
             _download_file_from_repo(record.get(repo_key, ""), target_path)
             or local_path
         )
     if not local_path.exists():
-        return None, f"The {label} file is missing. Please contact the site owner."
+        raise gr.Error(f"The {label} file is missing. Please contact the site owner.")
+    if local_path.suffix.lower() != target_path.suffix.lower():
+        raise gr.Error(f"The {label} artifact has the wrong file type. Please rerun the job.")
 
     _mark_downloaded(job_id, record)
-    return str(local_path), f"Download started. These files will be deleted {RESULT_DELETE_AFTER_DOWNLOAD_DAYS} day after the first download."
+    return local_path
 
 
-def download_starmap(job_id: str) -> tuple[str | None, str]:
-    return _download_named_result(
+def download_starmap(job_id: str) -> str:
+    return str(_prepare_named_result(
         job_id,
         local_key="starmap_path",
         repo_key="starmap_repo_path",
         target_path=_result_starmap_path(job_id),
         label="starmap",
-    )
+    ))
 
 
-def download_excel(job_id: str) -> tuple[str | None, str]:
-    return _download_named_result(
+def download_excel(job_id: str) -> str:
+    return str(_prepare_named_result(
         job_id,
         local_key="excel_path",
         repo_key="excel_repo_path",
         target_path=_result_excel_path(job_id),
         label="Excel",
-    )
+    ))
 
 
 def _build_app() -> gr.Blocks:
@@ -985,10 +992,18 @@ def _build_app() -> gr.Blocks:
                     status = gr.Markdown("Submit a CV to start.", elem_classes=["asm-status"])
                     check = gr.Button("Check status")
                     with gr.Row(elem_classes=["asm-downloads"]):
-                        download_starmap_btn = gr.Button("Download starmap", variant="primary")
-                        download_excel_btn = gr.Button("Download Excel")
-                    starmap_file = gr.File(label="Starmap HTML")
-                    excel_file = gr.File(label="Excel workbook")
+                        gr.DownloadButton(
+                            "Download starmap",
+                            value=download_starmap,
+                            inputs=[job_id],
+                            variant="secondary",
+                        )
+                        gr.DownloadButton(
+                            "Download Excel",
+                            value=download_excel,
+                            inputs=[job_id],
+                            variant="secondary",
+                        )
 
             submit.click(
                 start_job,
@@ -1003,16 +1018,6 @@ def _build_app() -> gr.Blocks:
                 outputs=[status, job_id],
             )
             check.click(check_status, inputs=[job_id], outputs=[status])
-            download_starmap_btn.click(
-                download_starmap,
-                inputs=[job_id],
-                outputs=[starmap_file, status],
-            )
-            download_excel_btn.click(
-                download_excel,
-                inputs=[job_id],
-                outputs=[excel_file, status],
-            )
 
             gr.Markdown(CONTENT["privacy_note_md"], elem_classes=["asm-footer"])
 

@@ -58,6 +58,7 @@ Optional:
 
 ```text
 SEMANTIC_SCHOLAR_API_KEY=<Semantic Scholar API key>
+EMAIL_BACKEND=brevo
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=WestleySoudry@gmail.com
@@ -67,7 +68,7 @@ MAX_WORKERS=1
 MAX_CV_BYTES=20971520
 ```
 
-Email delivery prefers the Brevo HTTPS API when `BREVO_API_KEY` is configured. SMTP is kept as a fallback, but some hosting platforms block outbound SMTP ports.
+Email delivery uses the Brevo HTTPS API by default because some hosting platforms block outbound SMTP ports. SMTP is only used when `EMAIL_BACKEND=smtp`.
 
 ## Privacy Defaults
 
