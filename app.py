@@ -663,13 +663,16 @@ def _prepare_named_result(
     repo_key: str,
     target_path: Path,
     label: str,
-) -> Path:
+) -> Path | None:
+    job_id = (job_id or "").strip()
+    if not job_id:
+        return None
     _cleanup_expired_jobs()
     record = _get_job(job_id)
     if not record:
-        raise gr.Error("No job found for that ID.")
+        return None
     if record.get("status") != "completed":
-        raise gr.Error(f"Job is not ready yet. Current status: {record.get('status')}")
+        return None
 
     local_path = Path(record.get(local_key) or target_path)
     if local_path.suffix.lower() != target_path.suffix.lower():
@@ -688,24 +691,26 @@ def _prepare_named_result(
     return local_path
 
 
-def download_starmap(job_id: str) -> str:
-    return str(_prepare_named_result(
+def download_starmap(job_id: str) -> str | None:
+    path = _prepare_named_result(
         job_id,
         local_key="starmap_path",
         repo_key="starmap_repo_path",
         target_path=_result_starmap_path(job_id),
         label="starmap",
-    ))
+    )
+    return str(path) if path else None
 
 
-def download_excel(job_id: str) -> str:
-    return str(_prepare_named_result(
+def download_excel(job_id: str) -> str | None:
+    path = _prepare_named_result(
         job_id,
         local_key="excel_path",
         repo_key="excel_repo_path",
         target_path=_result_excel_path(job_id),
         label="Excel",
-    ))
+    )
+    return str(path) if path else None
 
 
 def _build_app() -> gr.Blocks:
