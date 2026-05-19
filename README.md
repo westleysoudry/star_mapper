@@ -69,7 +69,7 @@ MAX_WORKERS=1
 MAX_CV_BYTES=20971520
 ```
 
-Email delivery uses an HTTPS email API by default because some hosting platforms block outbound SMTP ports. Add `RESEND_API_KEY` or `BREVO_API_KEY`; SMTP is only used when `EMAIL_BACKEND=smtp`.
+Email delivery uses an HTTPS email API by default because some hosting platforms block outbound SMTP ports. Add `RESEND_API_KEY` or `BREVO_API_KEY`; SMTP is only used when `EMAIL_BACKEND=smtp`. For Brevo, `MAIL_FROM` should be a sender address verified in Brevo. If `MAIL_FROM` is not set, the app falls back to `ADMIN_COPY_EMAIL`.
 
 ## Privacy Defaults
 

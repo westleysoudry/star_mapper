@@ -261,6 +261,25 @@ def _attachment_payloads(paths: list[Path]) -> list[dict[str, str]]:
     return payloads
 
 
+def _mail_from() -> str:
+    return (
+        os.getenv("MAIL_FROM")
+        or os.getenv("SMTP_USERNAME")
+        or ADMIN_COPY_EMAIL
+        or "westleysoudry@gmail.com"
+    ).strip()
+
+
+def _email_http_error(service: str, response: httpx.Response) -> str:
+    try:
+        detail = json.dumps(response.json(), ensure_ascii=False)
+    except Exception:
+        detail = response.text.strip()
+    if len(detail) > 600:
+        detail = f"{detail[:600]}..."
+    return f"Could not send email with {service} API: HTTP {response.status_code}: {detail}"
+
+
 def _send_brevo_email(
     to_addr: str,
     *,
@@ -271,7 +290,7 @@ def _send_brevo_email(
     api_key = os.getenv("BREVO_API_KEY")
     if not api_key:
         return "Brevo API is not configured."
-    mail_from = os.getenv("MAIL_FROM") or os.getenv("SMTP_USERNAME")
+    mail_from = _mail_from()
     if not mail_from:
         return "MAIL_FROM is required for Brevo email delivery."
 
@@ -298,7 +317,8 @@ def _send_brevo_email(
             json=payload,
             timeout=30,
         )
-        response.raise_for_status()
+        if response.is_error:
+            return _email_http_error("Brevo", response)
         return None
     except Exception as exc:
         return f"Could not send email with Brevo API: {exc}"
@@ -346,7 +366,8 @@ def _send_resend_email(
             json=payload,
             timeout=30,
         )
-        response.raise_for_status()
+        if response.is_error:
+            return _email_http_error("Resend", response)
         return None
     except Exception as exc:
         return f"Could not send email with Resend API: {exc}"
@@ -708,6 +729,8 @@ def check_status(job_id: str) -> str:
         lines.append("The starmap and Excel file are ready.")
         if record.get("email_warning"):
             lines.append(f"Email note: {record['email_warning']}")
+        if record.get("admin_email_warning"):
+            lines.append(f"Admin email note: {record['admin_email_warning']}")
     if status == "expired":
         lines.append("These result files have expired and were deleted.")
     return "\n\n".join(lines)
