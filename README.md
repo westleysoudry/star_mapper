@@ -1,3 +1,13 @@
+---
+title: Academic Star Map
+emoji: ⭐
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Academic Star Map
 
 Academic Star Map builds an interactive researcher starmap from a CV and public scholarly metadata.
