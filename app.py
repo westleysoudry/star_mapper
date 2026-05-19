@@ -705,17 +705,69 @@ def _build_app() -> gr.Blocks:
     css = """
     body {
         background-color: #080a14;
-        background-image:
-            radial-gradient(circle, rgba(255,255,255,0.70) 0 1px, transparent 1.6px),
-            radial-gradient(circle, rgba(140,217,255,0.42) 0 1px, transparent 1.5px),
-            radial-gradient(circle, rgba(255,255,255,0.24) 0 1px, transparent 1.4px);
-        background-size: 150px 150px, 230px 230px, 360px 360px;
-        background-position: 20px 34px, 90px 120px, 40px 80px;
+        overflow-x: hidden;
     }
+    #root,
+    .app,
+    main,
     .gradio-container {
         max-width: none !important;
         background: transparent !important;
         color: #f5f7fb;
+    }
+    .asm-space-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 18% 28%, rgba(80, 210, 190, 0.22), transparent 13rem),
+            radial-gradient(circle at 78% 78%, rgba(205, 85, 210, 0.16), transparent 15rem),
+            radial-gradient(circle at 70% 18%, rgba(150, 230, 90, 0.14), transparent 14rem),
+            #080a14;
+    }
+    .asm-space-bg::before,
+    .asm-space-bg::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-repeat: repeat;
+    }
+    .asm-space-bg::before {
+        opacity: 0.72;
+        background-image:
+            radial-gradient(circle, rgba(255,255,255,0.88) 0 1.2px, transparent 1.8px),
+            radial-gradient(circle, rgba(140,217,255,0.58) 0 1px, transparent 1.7px),
+            radial-gradient(circle, rgba(255,255,255,0.30) 0 1px, transparent 1.6px);
+        background-size: 86px 86px, 132px 132px, 214px 214px;
+        background-position: 6px 20px, 44px 72px, 120px 30px;
+    }
+    .asm-space-bg::after {
+        opacity: 0.48;
+        background-image:
+            radial-gradient(circle, rgba(255,255,255,0.96) 0 1.8px, transparent 2.6px),
+            radial-gradient(circle, rgba(255,217,0,0.42) 0 1.3px, transparent 2px);
+        background-size: 310px 310px, 430px 430px;
+        background-position: 120px 80px, 260px 210px;
+    }
+    .asm-comet {
+        position: fixed;
+        top: 15%;
+        left: 10%;
+        width: 150px;
+        height: 2px;
+        z-index: 1;
+        pointer-events: none;
+        transform: rotate(21deg);
+        background: linear-gradient(90deg, transparent, rgba(210, 235, 255, 0.72), rgba(255,255,255,0.95));
+        filter: drop-shadow(0 0 7px rgba(140,217,255,0.55));
+        opacity: 0.70;
+    }
+    .asm-shell,
+    .asm-hero,
+    .asm-panel {
+        position: relative;
+        z-index: 2;
     }
     .asm-shell {
         max-width: 1180px;
@@ -723,7 +775,7 @@ def _build_app() -> gr.Blocks:
         padding: 22px 18px 30px;
     }
     .asm-hero {
-        background: rgba(8, 10, 20, 0.88);
+        background: rgba(8, 10, 20, 0.80);
         color: #f8fafc;
         border: 1px solid rgba(140, 217, 255, 0.24);
         border-radius: 8px;
@@ -754,7 +806,7 @@ def _build_app() -> gr.Blocks:
         align-items: stretch;
     }
     .asm-panel {
-        background: rgba(15, 22, 38, 0.92);
+        background: rgba(15, 22, 38, 0.84);
         border: 1px solid rgba(140, 217, 255, 0.22);
         border-radius: 8px;
         padding: 18px;
@@ -784,6 +836,22 @@ def _build_app() -> gr.Blocks:
     .asm-downloads button {
         min-height: 44px;
         font-weight: 650;
+    }
+    .asm-panel button,
+    .asm-panel button.primary {
+        background: rgba(18, 30, 48, 0.92) !important;
+        border: 1px solid rgba(140, 217, 255, 0.38) !important;
+        color: #e8f7ff !important;
+        box-shadow: 0 0 18px rgba(140, 217, 255, 0.12) !important;
+    }
+    .asm-panel button:hover,
+    .asm-panel button.primary:hover {
+        background: rgba(28, 44, 70, 0.96) !important;
+        border-color: rgba(243, 217, 77, 0.46) !important;
+        color: #ffffff !important;
+    }
+    .asm-downloads button:first-child {
+        background: rgba(27, 63, 76, 0.90) !important;
     }
     .asm-panel label,
     .asm-panel span,
@@ -833,6 +901,8 @@ def _build_app() -> gr.Blocks:
     with gr.Blocks(title=CONTENT["brand"], css=css, theme=theme) as demo:
         gr.HTML(
             f"""
+            <div class="asm-space-bg" aria-hidden="true"></div>
+            <div class="asm-comet" aria-hidden="true"></div>
             <main class="asm-shell">
               <section class="asm-hero">
                 <h1>{CONTENT['brand']}</h1>
